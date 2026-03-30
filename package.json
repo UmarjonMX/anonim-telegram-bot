@@ -1,0 +1,13 @@
+{
+  "name": "anonim-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for anonymous channel posting deployed on Vercel",
+  "main": "api/bot.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0"
+  }
+}
