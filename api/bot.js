@@ -22,6 +22,43 @@ export default async function handler(req, res) {
   try {
     const { body } = req;
     
+    // Process callback queries (inline button clicks)
+    if (body && body.callback_query) {
+      const query = body.callback_query;
+      const data = query.data;
+      const from = query.from;
+      const message = query.message;
+
+      if (data.startsWith('delchan_')) {
+        const msgId = data.split('_')[1];
+        try {
+          await bot.deleteMessage(channelId, msgId);
+          await bot.editMessageText("🗑 Xabar kanaldan o'chirildi.", {
+            chat_id: message.chat.id,
+            message_id: message.message_id
+          });
+          await bot.answerCallbackQuery(query.id);
+        } catch (err) {
+          console.error('Error deleting channel message:', err);
+          await bot.answerCallbackQuery(query.id, { text: "Xatolik yuz berdi" });
+        }
+      } else if (data.startsWith('delgrp_')) {
+        const ownerId = data.split('_')[1];
+        if (from.id.toString() === ownerId) {
+          try {
+            await bot.deleteMessage(message.chat.id, message.message_id);
+            await bot.answerCallbackQuery(query.id);
+          } catch (err) {
+            console.error('Error deleting group message:', err);
+            await bot.answerCallbackQuery(query.id, { text: "Xatolik yuz berdi" });
+          }
+        } else {
+          await bot.answerCallbackQuery(query.id, { text: "🚫 Bu xabarni faqat egasi o'chira oladi!", show_alert: true });
+        }
+      }
+      return res.status(200).send('OK');
+    }
+
     // Validate that the request has a message object
     if (body && body.message) {
       const msg = body.message;
@@ -30,7 +67,7 @@ export default async function handler(req, res) {
       const messageId = msg.message_id;
       const chatType = msg.chat.type;
 
-      const badWords = ['badword1', 'badword2', 'jargon', '18+word'];
+      const badWords = ['badword1', 'badword2', 'jargon', '18+word',"sevgi","sevaman","sevgilim","sevgim","sevgilimga","sevgimga","kot","xarom","qiz","yigit",];
 
       if (chatType === 'supergroup' || chatType === 'group') {
         // Group Logic
@@ -57,7 +94,10 @@ export default async function handler(req, res) {
               if (msg.reply_to_message) {
                 options.reply_to_message_id = msg.reply_to_message.message_id;
               }
-              await bot.sendMessage(chatId, `👤 Anonim:\n\n${extractedText}`, options);
+              options.reply_markup = { 
+                inline_keyboard: [[{ text: "🗑 O'chirish", callback_data: `delgrp_${msg.from.id}` }]] 
+              };
+              await bot.sendMessage(chatId, `👤 Anonim: ${extractedText}`, options);
             } catch (err) {
               console.error('Error sending anonymous message in group:', err);
             }
@@ -91,8 +131,12 @@ export default async function handler(req, res) {
 
           // Copy message to the target channel (ensures anonymity)
           try {
-            await bot.copyMessage(channelId, chatId, messageId);
-            await bot.sendMessage(chatId, 'Xabaringiz muvaffaqiyatli yuborildi!');
+            const copiedMsg = await bot.copyMessage(channelId, chatId, messageId);
+            await bot.sendMessage(chatId, 'Xabaringiz muvaffaqiyatli yuborildi!', {
+              reply_markup: { 
+                inline_keyboard: [[{ text: "🗑 O'chirish", callback_data: `delchan_${copiedMsg.message_id}` }]] 
+              }
+            });
           } catch (copyError) {
             console.error('Error copying message:', copyError);
             try {
