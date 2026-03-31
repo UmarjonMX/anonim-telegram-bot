@@ -9,7 +9,7 @@ async function checkTextWithAI(text) {
   if (!text) return true;
   try {
     console.log("User Text:", text);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     const prompt = "Sen qat'iy o'zbek tili moderatorisan. Matnda haqorat, so'kinish, 18+, sevgi izhori, romantika, reklama yoki linklar bo'lsa faqat 'YOMON' degan bitta so'z yoz. Agar matn mutlaqo toza bo'lsa, faqat 'TOZA' degan bitta so'z yoz. Tushuntirish, nuqta, vergul yoki boshqa so'z ishlatma. Matn: " + text;
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
@@ -20,9 +20,9 @@ async function checkTextWithAI(text) {
       return true;
     }
     return false;
-  } catch (err) {
-    console.error('Gemini API Error:', err);
-    return null;
+  } catch (error) {
+    console.error("AI Error:", error);
+    return "ERROR: " + error.message;
   }
 }
 
@@ -127,7 +127,12 @@ export default async function handler(req, res) {
       if (msg.text && msg.text.startsWith('/anon ')) {
         const extractedText = msg.text.substring(6).trim();
         
-        const isClean = await checkTextWithAI(extractedText);
+        const aiResult = await checkTextWithAI(extractedText);
+        if (typeof aiResult === 'string' && aiResult.startsWith("ERROR: ")) {
+          await bot.sendMessage(chatId, "⚠️ AI Xatosi: " + aiResult);
+          return res.status(200).send('OK');
+        }
+        const isClean = aiResult;
         
         if (isClean === null) {
            return res.status(200).send('OK');
@@ -165,7 +170,12 @@ export default async function handler(req, res) {
 
     // Private Logic
     if (chatType === 'private') {
-      const isClean = await checkTextWithAI(textToCheck);
+      const aiResult = await checkTextWithAI(textToCheck);
+      if (typeof aiResult === 'string' && aiResult.startsWith("ERROR: ")) {
+        await bot.sendMessage(chatId, "⚠️ AI Xatosi: " + aiResult);
+        return res.status(200).send('OK');
+      }
+      const isClean = aiResult;
 
       if (isClean === null) {
         // If null, send AI error message
