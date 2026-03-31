@@ -90,6 +90,15 @@ export default async function handler(req, res) {
       const messageId = msg.message_id;
       const chatType = msg.chat.type;
 
+      if (msg.animation) {
+        if (chatType === 'private') {
+          await bot.sendMessage(chatId, "🚫 Kechirasiz, anonim tarzda GIF yuborish taqiqlangan.").catch(console.error);
+        } else if (chatType === 'supergroup' || chatType === 'group') {
+          await bot.deleteMessage(chatId, messageId).catch(console.error);
+        }
+        return res.status(200).send('OK');
+      }
+
       if (chatType === 'supergroup' || chatType === 'group') {
         // Group Logic
         if (text && text.startsWith('/anon ')) {
