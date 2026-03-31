@@ -1,8 +1,10 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// Initialize the bot and genAI at the top.
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// AI Function
 async function checkTextWithAI(text) {
   if (!text) return true;
   try {
@@ -11,18 +13,20 @@ async function checkTextWithAI(text) {
     const prompt = "Sen qat'iy o'zbek tili moderatorisan. Matnda haqorat, so'kinish, 18+, sevgi izhori, romantika, reklama yoki linklar bo'lsa faqat 'YOMON' degan bitta so'z yoz. Agar matn mutlaqo toza bo'lsa, faqat 'TOZA' degan bitta so'z yoz. Tushuntirish, nuqta, vergul yoki boshqa so'z ishlatma. Matn: " + text;
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
-    
     console.log("AI Response:", responseText);
-    if (responseText.toUpperCase().includes('YOMON')) {
-      return false;
+    
+    // Return true if response includes 'TOZA', else false. On catch, log error and return null.
+    if (responseText.toUpperCase().includes('TOZA')) {
+      return true;
     }
-    return true; 
+    return false;
   } catch (err) {
     console.error('Gemini API Error:', err);
-    return true; // allow message to pass if AI is down
+    return null;
   }
 }
 
+// Export Handler
 export default async function handler(req, res) {
   // Only process POST requests
   if (req.method !== 'POST') {
@@ -44,8 +48,8 @@ export default async function handler(req, res) {
 
   try {
     const { body } = req;
-    
-    // Process callback queries (inline button clicks)
+
+    // Callback Queries
     if (body && body.callback_query) {
       const query = body.callback_query;
       const data = query.data;
@@ -82,110 +86,127 @@ export default async function handler(req, res) {
       return res.status(200).send('OK');
     }
 
-    // Validate that the request has a message object
-    if (body && body.message) {
-      const msg = body.message;
-      const chatId = msg.chat.id;
-      const text = msg.text;
-      const messageId = msg.message_id;
-      const chatType = msg.chat.type;
+    // Message Extraction
+    if (!body || !body.message) {
+      return res.status(200).send('OK');
+    }
 
-      if (msg.animation) {
-        if (chatType === 'private') {
-          await bot.sendMessage(chatId, "🚫 Kechirasiz, anonim tarzda GIF yuborish taqiqlangan.").catch(console.error);
-        } else if (chatType === 'supergroup' || chatType === 'group') {
-          await bot.deleteMessage(chatId, messageId).catch(console.error);
+    const msg = body.message;
+    const chatId = msg.chat.id;
+    const messageId = msg.message_id;
+    const chatType = msg.chat.type;
+
+    // STRICT GIF/Media Block
+    if (msg.animation || msg.sticker || msg.document) {
+      if (chatType === 'private') {
+        await bot.sendMessage(chatId, "🚫 Kechirasiz, anonim tarzda GIF yoki fayl yuborish taqiqlangan.").catch(console.error);
+      } else if (chatType === 'supergroup' || chatType === 'group') {
+        await bot.deleteMessage(chatId, messageId).catch(console.error);
+      }
+      return res.status(200).send('OK');
+    }
+
+    // Start Command
+    if (chatType === 'private' && msg.text === '/start') {
+      try {
+        await bot.sendMessage(
+          chatId, 
+          'Salom! Menga istalgan xabarni yuboring, uni kanalga anonim tarzda joylayman.'
+        );
+      } catch (err) {
+        console.error('Error sending start message:', err);
+      }
+      return res.status(200).send('OK');
+    }
+
+    // Text Extraction
+    const textToCheck = msg.text || msg.caption || "";
+
+    // Group Logic
+    if (chatType === 'supergroup' || chatType === 'group') {
+      if (msg.text && msg.text.startsWith('/anon ')) {
+        const extractedText = msg.text.substring(6).trim();
+        
+        const isClean = await checkTextWithAI(extractedText);
+        
+        if (isClean === null) {
+           return res.status(200).send('OK');
+        } else if (isClean === false) {
+           try {
+             await bot.deleteMessage(chatId, messageId);
+           } catch (err) {
+             console.error('Error deleting bad word message in group:', err);
+           }
+           return res.status(200).send('OK');
+        } else if (isClean === true) {
+           try {
+             await bot.deleteMessage(chatId, messageId);
+           } catch (err) {
+             console.error('Error deleting original message in group:', err);
+           }
+           
+           try {
+             const options = {};
+             if (msg.reply_to_message) {
+               options.reply_to_message_id = msg.reply_to_message.message_id;
+             }
+             options.reply_markup = { 
+               inline_keyboard: [[{ text: "🗑 O'chirish", callback_data: `delgrp_${msg.from.id}` }]] 
+             };
+             await bot.sendMessage(chatId, `👤 Anonim: ${extractedText}`, options);
+           } catch (err) {
+             console.error('Error sending anonymous message in group:', err);
+           }
+           return res.status(200).send('OK');
+        }
+      }
+      return res.status(200).send('OK');
+    }
+
+    // Private Logic
+    if (chatType === 'private') {
+      const isClean = await checkTextWithAI(textToCheck);
+
+      if (isClean === null) {
+        // If null, send AI error message
+        try {
+          await bot.sendMessage(chatId, "⚠️ AI tizimida xatolik yuz berdi");
+        } catch (err) {
+          console.error(err);
+        }
+        return res.status(200).send('OK');
+      } else if (isClean === false) {
+        try {
+          await bot.sendMessage(chatId, "🚫 Uzr, xabaringizda taqiqlangan so'zlar bor. Iltimos, hurmatni saqlang!");
+        } catch (err) {
+          console.error(err);
+        }
+        return res.status(200).send('OK');
+      } else if (isClean === true) {
+        try {
+          const copiedMsg = await bot.copyMessage(channelId, chatId, messageId);
+          await bot.sendMessage(chatId, 'Xabaringiz muvaffaqiyatli yuborildi!', {
+            reply_markup: { 
+              inline_keyboard: [[{ text: "🗑 O'chirish", callback_data: `delchan_${copiedMsg.message_id}` }]] 
+            }
+          });
+        } catch (copyError) {
+          console.error('Error copying message:', copyError);
+          try {
+            await bot.sendMessage(chatId, 'Xatolik yuz berdi, xabar yuborilmadi.');
+          } catch (err) {
+            console.error('Error sending error message:', err);
+          }
         }
         return res.status(200).send('OK');
       }
-
-      if (chatType === 'supergroup' || chatType === 'group') {
-        // Group Logic
-        if (text && text.startsWith('/anon ')) {
-          const extractedText = text.substring(6).trim();
-          
-          const isClean = await checkTextWithAI(extractedText);
-          const isBad = !isClean;
-
-          if (isBad) {
-            try {
-              await bot.deleteMessage(chatId, messageId);
-            } catch (err) {
-              console.error('Error deleting bad word message in group:', err);
-            }
-          } else {
-            // Clean text
-            try {
-              await bot.deleteMessage(chatId, messageId);
-            } catch (err) {
-              console.error('Error deleting original message in group:', err);
-            }
-            
-            try {
-              const options = {};
-              if (msg.reply_to_message) {
-                options.reply_to_message_id = msg.reply_to_message.message_id;
-              }
-              options.reply_markup = { 
-                inline_keyboard: [[{ text: "🗑 O'chirish", callback_data: `delgrp_${msg.from.id}` }]] 
-              };
-              await bot.sendMessage(chatId, `👤 Anonim: ${extractedText}`, options);
-            } catch (err) {
-              console.error('Error sending anonymous message in group:', err);
-            }
-          }
-        }
-      } else if (chatType === 'private') {
-        // Private chat logic
-        // Handle the /start command
-        if (text === '/start') {
-          try {
-            await bot.sendMessage(
-              chatId, 
-              'Salom! Menga istalgan xabarni yuboring, uni kanalga anonim tarzda joylayman.'
-            );
-          } catch (err) {
-            console.error('Error sending start message:', err);
-          }
-        } else {
-          // Profanity filter logic
-          const textToCheck = (msg.text || msg.caption || "");
-          const isClean = await checkTextWithAI(textToCheck);
-          const isBad = !isClean;
-          
-          if (isBad) {
-            try {
-              await bot.sendMessage(chatId, "🚫 Uzr, xabaringizda taqiqlangan so'zlar bor. Iltimos, hurmatni saqlang!");
-            } catch (err) {
-              console.error('Error sending bad word warning:', err);
-            }
-            return res.status(200).send('OK');
-          }
-
-          // Copy message to the target channel (ensures anonymity)
-          try {
-            const copiedMsg = await bot.copyMessage(channelId, chatId, messageId);
-            await bot.sendMessage(chatId, 'Xabaringiz muvaffaqiyatli yuborildi!', {
-              reply_markup: { 
-                inline_keyboard: [[{ text: "🗑 O'chirish", callback_data: `delchan_${copiedMsg.message_id}` }]] 
-              }
-            });
-          } catch (copyError) {
-            console.error('Error copying message:', copyError);
-            try {
-              await bot.sendMessage(chatId, 'Xatolik yuz berdi, xabar yuborilmadi.');
-            } catch (err) {
-              console.error('Error sending error message:', err);
-            }
-          } // End inner try/catch
-        }
-      }
     }
+
+    // Fallback for any other logic paths
+    return res.status(200).send('OK');
+
   } catch (error) {
     console.error('General webhook error:', error);
+    return res.status(200).send('OK');
   }
-  
-  // Crucial: Always return res.status(200).send('OK') at the end
-  // This prevents Telegram from retrying the webhook continuously
-  return res.status(200).send('OK');
 }
