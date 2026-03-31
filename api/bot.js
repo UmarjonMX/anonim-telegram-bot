@@ -108,10 +108,12 @@ export default async function handler(req, res) {
 
     // Start Command
     if (chatType === 'private' && msg.text === '/start') {
+      const welcomeText = "Xush kelibsiz! Bu bot xabarlaringizni mutlaqo anonim tarzda @imi_anonymous (https://t.me/imi_anonymous) kanaliga yuboradi.\n\n🚨 /rules (qoidalar) ni unutmang: agar ularni buzsangiz, xabarlaringiz kanalga joylanishidan oldin adminlar tekshiruvidan o'tishi mumkin.\n\n💡 Botdan maksimal darajada foydalanmoqchimisiz? Unda foydali /tips (maslahatlar) bilan tanishib chiqing!\n\nMaroq bilan foydalaning va hurmatni saqlang)";
       try {
         await bot.sendMessage(
           chatId, 
-          'Salom! Menga istalgan xabarni yuboring, uni kanalga anonim tarzda joylayman.'
+          welcomeText,
+          { disable_web_page_preview: true }
         );
       } catch (err) {
         console.error('Error sending start message:', err);
