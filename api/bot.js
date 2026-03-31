@@ -67,7 +67,7 @@ export default async function handler(req, res) {
       const messageId = msg.message_id;
       const chatType = msg.chat.type;
 
-      const badWords = ['badword1', 'badword2', 'jargon', '18+word',"sevgi","sevaman","sevgilim","sevgim","sevgilimga","sevgimga","kot","xarom","qiz","yigit",];
+      const badWords = ['sevaman', 'seviglim', 'jonim', 'qiz', 'zaybal', 'kot', 'yban', 'sevgi', 'muhabbat', 'sevgim', 'qanjiq', 'kut'];
 
       if (chatType === 'supergroup' || chatType === 'group') {
         // Group Logic
