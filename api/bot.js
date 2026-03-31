@@ -7,7 +7,7 @@ async function checkTextWithAI(text) {
   if (!text) return true;
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = "Sensan qat'iy o'zbek tili moderatorisan. Matnda haqorat, so'kinish, 18+ mavzu, jargon yoki yomon so'zlar borligini tekshir. Agar matn toza bo'lsa faqat 'TOZA' deb javob ber. Agar yomon bo'lsa faqat 'YOMON' deb javob ber. Hech qanday izoh yozma. Matn: " + text;
+    const prompt = "Sen qat'iy o'zbek tili moderatorisan. Matnda quyidagilar bor-yo'qligini tekshir: 1. Haqorat, so'kinish, jargon yoki 18+ mavzu. 2. Sevgi, muhabbat izhorlari, erkalatish yoki romantik gaplar. 3. Reklama, havolalar (linklar) yoki spam. Agar matnda shulardan birortasi bo'lsa yoki shubha tug'dirsa, faqat 'YOMON' deb javob ber. Agar matn mutlaqo toza bo'lsa, faqat 'TOZA' deb javob ber. Hech qanday izoh yozma. Matn: " + text;
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
     if (responseText.toUpperCase().includes('YOMON')) {
