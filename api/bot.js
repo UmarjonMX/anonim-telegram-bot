@@ -24,9 +24,10 @@ export default async function handler(req, res) {
     
     // Validate that the request has a message object
     if (body && body.message) {
-      const chatId = body.message.chat.id;
-      const text = body.message.text;
-      const messageId = body.message.message_id;
+      const msg = body.message;
+      const chatId = msg.chat.id;
+      const text = msg.text;
+      const messageId = msg.message_id;
 
       // Handle the /start command
       if (text === '/start') {
@@ -35,6 +36,17 @@ export default async function handler(req, res) {
           'Salom! Menga istalgan xabarni yuboring, uni kanalga anonim tarzda joylayman.'
         );
       } else {
+        // Profanity filter logic
+        const badWords = ['badword1', 'badword2', 'jargon', '18+word'];
+        const textToCheck = (msg.text || msg.caption || "").toLowerCase();
+        
+        const hasBadWord = badWords.some(word => textToCheck.includes(word));
+        
+        if (hasBadWord) {
+          await bot.sendMessage(chatId, "🚫 Uzr, xabaringizda taqiqlangan so'zlar bor. Iltimos, hurmatni saqlang!");
+          return res.status(200).send('OK');
+        }
+
         // Copy message to the target channel (ensures anonymity)
         try {
           await bot.copyMessage(channelId, chatId, messageId);
