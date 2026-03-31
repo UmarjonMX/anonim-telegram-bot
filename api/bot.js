@@ -1,4 +1,24 @@
 import TelegramBot from 'node-telegram-bot-api';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+async function checkTextWithAI(text) {
+  if (!text) return true;
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = "Sensan qat'iy o'zbek tili moderatorisan. Matnda haqorat, so'kinish, 18+ mavzu, jargon yoki yomon so'zlar borligini tekshir. Agar matn toza bo'lsa faqat 'TOZA' deb javob ber. Agar yomon bo'lsa faqat 'YOMON' deb javob ber. Hech qanday izoh yozma. Matn: " + text;
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    if (responseText.toUpperCase().includes('YOMON')) {
+      return false;
+    }
+    return true; 
+  } catch (err) {
+    console.error('Gemini API Error:', err);
+    return true; // allow message to pass if AI is down
+  }
+}
 
 export default async function handler(req, res) {
   // Only process POST requests
@@ -67,15 +87,15 @@ export default async function handler(req, res) {
       const messageId = msg.message_id;
       const chatType = msg.chat.type;
 
-      const badWords = ['sevaman', 'seviglim', 'jonim', 'qiz', 'zaybal', 'kot', 'yban', 'sevgi', 'muhabbat', 'sevgim', 'qanjiq', 'kut'];
-
       if (chatType === 'supergroup' || chatType === 'group') {
         // Group Logic
         if (text && text.startsWith('/anon ')) {
           const extractedText = text.substring(6).trim();
-          const hasBadWord = badWords.some(word => extractedText.toLowerCase().includes(word));
+          
+          const isClean = await checkTextWithAI(extractedText);
+          const isBad = !isClean;
 
-          if (hasBadWord) {
+          if (isBad) {
             try {
               await bot.deleteMessage(chatId, messageId);
             } catch (err) {
@@ -117,10 +137,11 @@ export default async function handler(req, res) {
           }
         } else {
           // Profanity filter logic
-          const textToCheck = (msg.text || msg.caption || "").toLowerCase();
-          const hasBadWord = badWords.some(word => textToCheck.includes(word));
+          const textToCheck = (msg.text || msg.caption || "");
+          const isClean = await checkTextWithAI(textToCheck);
+          const isBad = !isClean;
           
-          if (hasBadWord) {
+          if (isBad) {
             try {
               await bot.sendMessage(chatId, "🚫 Uzr, xabaringizda taqiqlangan so'zlar bor. Iltimos, hurmatni saqlang!");
             } catch (err) {
