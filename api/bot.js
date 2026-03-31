@@ -170,6 +170,22 @@ export default async function handler(req, res) {
 
     // Private Logic
     if (chatType === 'private') {
+      try {
+        const member = await bot.getChatMember('@imi_anonymous', msg.from.id);
+        if (member.status === 'left' || member.status === 'kicked') {
+          const opts = {
+            reply_markup: {
+              inline_keyboard: [[{ text: "📢 Kanalga obuna bo'lish", url: "https://t.me/imi_anonymous" }]]
+            }
+          };
+          await bot.sendMessage(chatId, "🛑 Botdan foydalanish va anonim xabar yuborish uchun avval kanalimizga obuna bo'lishingiz shart!\n\nIltimos, pastdagi tugma orqali obuna bo'ling va xabaringizni qaytadan yuboring.", opts);
+          return res.status(200).send('OK');
+        }
+      } catch (err) {
+        console.error("Membership check error (Bot likely not admin in channel):", err.message);
+        // If there's an error (e.g. bot is not admin), we log it but do not block the user, to prevent the bot from breaking completely.
+      }
+
       const aiResult = await checkTextWithAI(textToCheck);
       if (typeof aiResult === 'string' && aiResult.startsWith("ERROR: ")) {
         await bot.sendMessage(chatId, "⚠️ AI Xatosi: " + aiResult);
