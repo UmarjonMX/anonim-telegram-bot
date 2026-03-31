@@ -6,10 +6,13 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 async function checkTextWithAI(text) {
   if (!text) return true;
   try {
+    console.log("User Text:", text);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = "Sen qat'iy o'zbek tili moderatorisan. Matnda quyidagilar bor-yo'qligini tekshir: 1. Haqorat, so'kinish, jargon yoki 18+ mavzu. 2. Sevgi, muhabbat izhorlari, erkalatish yoki romantik gaplar. 3. Reklama, havolalar (linklar) yoki spam. Agar matnda shulardan birortasi bo'lsa yoki shubha tug'dirsa, faqat 'YOMON' deb javob ber. Agar matn mutlaqo toza bo'lsa, faqat 'TOZA' deb javob ber. Hech qanday izoh yozma. Matn: " + text;
+    const prompt = "Sen qat'iy o'zbek tili moderatorisan. Matnda haqorat, so'kinish, 18+, sevgi izhori, romantika, reklama yoki linklar bo'lsa faqat 'YOMON' degan bitta so'z yoz. Agar matn mutlaqo toza bo'lsa, faqat 'TOZA' degan bitta so'z yoz. Tushuntirish, nuqta, vergul yoki boshqa so'z ishlatma. Matn: " + text;
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
+    
+    console.log("AI Response:", responseText);
     if (responseText.toUpperCase().includes('YOMON')) {
       return false;
     }
