@@ -171,9 +171,9 @@ export default async function handler(req, res) {
     }
   } catch (error) {
     console.error('General webhook error:', error);
-  } finally {
-    // Crucial: Always return res.status(200).send('OK') at the end
-    // This prevents Telegram from retrying the webhook continuously
-    return res.status(200).send('OK');
   }
+  
+  // Crucial: Always return res.status(200).send('OK') at the end
+  // This prevents Telegram from retrying the webhook continuously
+  return res.status(200).send('OK');
 }
