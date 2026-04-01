@@ -88,17 +88,28 @@ export default async function handler(req, res) {
           await bot.answerCallbackQuery(query.id, { text: "🚫 Bu xabarni faqat egasi o'chira oladi!", show_alert: true });
         }
       } else if (data.startsWith('ban_')) {
-        const userIdToBan = data.split('_')[1];
+        const userId = data.split('_')[1];
         try {
-          await bot.banChatMember(channelId, userIdToBan);
-          await bot.editMessageText("✅ Qoidabuzar kanaldan bloklandi va botdan uzildi!", {
-            chat_id: message.chat.id,
-            message_id: message.message_id
-          });
-          await bot.answerCallbackQuery(query.id);
+          await bot.banChatMember(channelId, userId);
+          await bot.editMessageReplyMarkup({
+            inline_keyboard: [[{ text: "♻️ Bandan olish (Unban)", callback_data: `unban_${userId}` }]]
+          }, { chat_id: message.chat.id, message_id: message.message_id });
+          await bot.answerCallbackQuery(query.id, { text: "🚫 Foydalanuvchi ban qilindi!" });
         } catch (err) {
-          console.error('Error banning user:', err);
-          await bot.answerCallbackQuery(query.id, { text: "Xatolik! Bot kanal admini emas.", show_alert: true });
+          console.error('Error banning:', err);
+          await bot.answerCallbackQuery(query.id, { text: "Xatolik yuz berdi.", show_alert: true });
+        }
+      } else if (data.startsWith('unban_')) {
+        const userId = data.split('_')[1];
+        try {
+          await bot.unbanChatMember(channelId, userId, { only_if_banned: true });
+          await bot.editMessageReplyMarkup({
+            inline_keyboard: [[{ text: "🚫 Ban qilish", callback_data: `ban_${userId}` }]]
+          }, { chat_id: message.chat.id, message_id: message.message_id });
+          await bot.answerCallbackQuery(query.id, { text: "✅ Foydalanuvchi blokdan chiqarildi!" });
+        } catch (err) {
+          console.error('Error unbanning:', err);
+          await bot.answerCallbackQuery(query.id, { text: "Xatolik yuz berdi.", show_alert: true });
         }
       }
       return res.status(200).send('OK');
@@ -249,10 +260,23 @@ export default async function handler(req, res) {
         return res.status(200).send('OK');
       } else if (isClean === true) {
         try {
-          const copiedMsg = await bot.copyMessage(channelId, chatId, messageId);
+          let sentMsgId;
+          let finalMsgText = msg.text || "";
+          const linkMatch = finalMsgText.match(/^https:\/\/t\.me\/(?:imi_anonymous\/|c\/\d+\/)?(\d+)\s+(.+)/is);
+
+          if (linkMatch && msg.text) {
+            const targetMsgId = parseInt(linkMatch[1], 10);
+            const actualComment = linkMatch[2];
+            const sentMsg = await bot.sendMessage(channelId, actualComment, { reply_to_message_id: targetMsgId });
+            sentMsgId = sentMsg.message_id;
+          } else {
+            const copiedMsg = await bot.copyMessage(channelId, chatId, messageId);
+            sentMsgId = copiedMsg.message_id;
+          }
+
           await bot.sendMessage(chatId, 'Xabaringiz muvaffaqiyatli yuborildi!', {
             reply_markup: { 
-              inline_keyboard: [[{ text: "🗑 O'chirish", callback_data: `delchan_${copiedMsg.message_id}` }]] 
+              inline_keyboard: [[{ text: "🗑 O'chirish", callback_data: `delchan_${sentMsgId}` }]] 
             }
           });
           if (logChannelId) {
