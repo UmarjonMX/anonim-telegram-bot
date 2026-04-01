@@ -43,6 +43,7 @@ export default async function handler(req, res) {
     console.error('BOT_TOKEN is missing');
     return res.status(500).send('Server configuration error');
   }
+  const logChannelId = process.env.LOG_CHANNEL_ID;
 
   // Target channel ID
   const channelId = -1003743171680;
@@ -85,6 +86,19 @@ export default async function handler(req, res) {
           }
         } else {
           await bot.answerCallbackQuery(query.id, { text: "🚫 Bu xabarni faqat egasi o'chira oladi!", show_alert: true });
+        }
+      } else if (data.startsWith('ban_')) {
+        const userIdToBan = data.split('_')[1];
+        try {
+          await bot.banChatMember(channelId, userIdToBan);
+          await bot.editMessageText("✅ Qoidabuzar kanaldan bloklandi va botdan uzildi!", {
+            chat_id: message.chat.id,
+            message_id: message.message_id
+          });
+          await bot.answerCallbackQuery(query.id);
+        } catch (err) {
+          console.error('Error banning user:', err);
+          await bot.answerCallbackQuery(query.id, { text: "Xatolik! Bot kanal admini emas.", show_alert: true });
         }
       }
       return res.status(200).send('OK');
@@ -241,6 +255,20 @@ export default async function handler(req, res) {
               inline_keyboard: [[{ text: "🗑 O'chirish", callback_data: `delchan_${copiedMsg.message_id}` }]] 
             }
           });
+          if (logChannelId) {
+            try {
+              await bot.copyMessage(logChannelId, chatId, messageId);
+              const logText = `🚨 Yangi anonim xabar:\n\n👤 Yuboruvchi: <a href="tg://user?id=${msg.from.id}">${msg.from.first_name || 'Ismsiz'}</a>\n🆔 ID: <code>${msg.from.id}</code>`;
+              await bot.sendMessage(logChannelId, logText, {
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [[{ text: "🚫 Ban qilish", callback_data: `ban_${msg.from.id}` }]]
+                }
+              });
+            } catch (logErr) {
+              console.error('Log channel error:', logErr);
+            }
+          }
         } catch (copyError) {
           console.error('Error copying message:', copyError);
           try {
