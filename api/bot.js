@@ -1,27 +1,29 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 
-// Initialize the bot and genAI at the top.
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize the bot and Groq AI at the top.
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // AI Function
 async function checkTextWithAI(text) {
   if (!text) return true;
   try {
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: "Sen qat'iy o'zbek tili moderatorisan. Matnda haqorat, so'kinish, 18+, sevgi izhori, romantika, reklama yoki linklar bo'lsa faqat 'YOMON' degan bitta so'z yoz. Agar matn mutlaqo toza bo'lsa, faqat 'TOZA' degan bitta so'z yoz. Tushuntirish, nuqta, vergul yoki boshqa so'z ishlatma. Matn: " + text,
+        },
+      ],
+      model: "llama3-8b-8192",
+      temperature: 0,
+    });
+    const responseText = chatCompletion.choices[0]?.message?.content || "";
     console.log("User Text:", text);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const prompt = "Sen qat'iy o'zbek tili moderatorisan. Matnda haqorat, so'kinish, 18+, sevgi izhori, romantika, reklama yoki linklar bo'lsa faqat 'YOMON' degan bitta so'z yoz. Agar matn mutlaqo toza bo'lsa, faqat 'TOZA' degan bitta so'z yoz. Tushuntirish, nuqta, vergul yoki boshqa so'z ishlatma. Matn: " + text;
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    console.log("AI Response:", responseText);
-    
-    // Return true if response includes 'TOZA', else false. On catch, log error and return null.
-    if (responseText.toUpperCase().includes('TOZA')) {
-      return true;
-    }
-    return false;
+    console.log("Groq AI Response:", responseText);
+    return responseText.includes("TOZA");
   } catch (error) {
-    console.error("AI Error:", error);
+    console.error("Groq AI Error:", error);
     return "ERROR: " + error.message;
   }
 }
