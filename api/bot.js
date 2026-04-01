@@ -15,7 +15,7 @@ async function checkTextWithAI(text) {
           content: "Sen qat'iy o'zbek tili moderatorisan. Matnda haqorat, so'kinish, 18+, sevgi izhori, romantika, reklama yoki linklar bo'lsa faqat 'YOMON' degan bitta so'z yoz. Agar matn mutlaqo toza bo'lsa, faqat 'TOZA' degan bitta so'z yoz. Tushuntirish, nuqta, vergul yoki boshqa so'z ishlatma. Matn: " + text,
         },
       ],
-      model: "llama3-8b-8192",
+      model: "llama-3.1-8b-instant",
       temperature: 0,
     });
     const responseText = chatCompletion.choices[0]?.message?.content || "";
