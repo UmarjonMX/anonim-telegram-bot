@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   }
 
   // Target channel ID
-  const channelId = -1003879989939;
+  const channelId = -1003743171680;
 
   // Initialize the bot instance
   const bot = new TelegramBot(token);
