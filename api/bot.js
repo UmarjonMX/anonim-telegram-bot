@@ -1,5 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import Groq from 'groq-sdk';
+import fs from 'fs';
+import path from 'path';
 
 // Initialize the bot and Groq AI at the top.
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -112,10 +114,11 @@ export default async function handler(req, res) {
     if (chatType === 'private' && msg.text === '/start') {
       const welcomeText = "Xush kelibsiz! Bu bot xabarlaringizni mutlaqo anonim tarzda @imi_anonymous (https://t.me/imi_anonymous) kanaliga yuboradi.\n\n🚨 /rules (qoidalar) ni unutmang: agar ularni buzsangiz, xabarlaringiz kanalga joylanishidan oldin adminlar tekshiruvidan o'tishi mumkin.\n\n💡 Botdan maksimal darajada foydalanmoqchimisiz? Unda foydali /tips (maslahatlar) bilan tanishib chiqing!\n\nMaroq bilan foydalaning va hurmatni saqlang)";
       try {
-        await bot.sendMessage(
-          chatId, 
-          welcomeText,
-          { disable_web_page_preview: true }
+        const startImage = fs.readFileSync(path.join(process.cwd(), 'images', 'start_pic.png'));
+        await bot.sendPhoto(
+          chatId,
+          startImage,
+          { caption: welcomeText, disable_web_page_preview: true }
         );
       } catch (err) {
         console.error('Error sending start message:', err);
@@ -126,7 +129,8 @@ export default async function handler(req, res) {
     if (chatType === 'private' && msg.text === '/rules') {
       const rulesText = "Chat qoidalari (yoki qanday qilib ban olmaslik siri):\n\n1. Hurmatni saqlang. Biz bu yerga o'qish va izlanish uchun yig'ilganmiz, chatda \"WWE\" janglarini uyushtirish uchun emas. Haqorat, tahdid va kamsitishlar qat'iyan man etiladi.\n\n2. Spam va reklamalar taqiqlanadi. Bu yer universitet maydoni, bozor emas. Loyihalaringiz, tovarlaringiz yoki \"kanalimga obuna bo'ling\" degan xabarlaringizni boshqa joyda qoldiring.\n\n3. Sevgi qissalari kerak emas. Muhabbatingizni hurmat qilamiz, lekin bu tanishuv ilovasi emas — keling, ko'proq ilm va foydali mashg'ulotlar haqida gaplashaylik.\n\n4. Havolalar (linklar) va fayllar adminlar tomonidan qo'lda tasdiqlanadi (ha, biz hammasini tekshiramiz). Matnli xabarlar esa sun'iy intellekt nazoratidan o'tadi — shuning uchun botni aldashga urinib ovora bo'lmang.\n\n⚠️ Jiddiy yoki qayta-qayta takrorlangan qoidabuzarliklar = abadiy ban. Ikkinchi imkoniyat yoki \"uzr, xato ketibdi\" degan bahonalar o'tmaydi.";
       try {
-        await bot.sendMessage(chatId, rulesText);
+        const rulesImage = fs.readFileSync(path.join(process.cwd(), 'images', 'rules_pic.png'));
+        await bot.sendPhoto(chatId, rulesImage, { caption: rulesText });
       } catch (err) { console.error(err); }
       return res.status(200).send('OK');
     }
@@ -134,7 +138,8 @@ export default async function handler(req, res) {
     if (chatType === 'private' && msg.text === '/tips') {
       const tipsText = "Botdan yanada qulay foydalanish uchun ba'zi maslahatlar:\n\n1. Xabarga javob berish (Reply): Kanaldagi kimningdir xabariga javob qaytarmoqchimisiz? Shunchaki o'sha xabarga \"Reply\" qiling, botni tanlang va javobingizni yuboring.\n\n2. Anonim izoh qoldirish: Kanaldagi postga yashirincha izoh yozish uchun xabaringizni /anon so'zi bilan boshlang.\n⚠️ Bu funksiya faqat shaxsiy akkauntlardan ishlaganida amal qiladi, kanal nomidan yozganda emas.\n\n3. Reel videolar ulashish: Shunchaki Instagram/YouTube havolasini (linkini) tashlang va bot videoning o'zini kanalga joylab beradi.\n\n4. Yordam va aloqa: Savollar yoki ajoyib g'oyalaringiz bormi? Istalgan vaqtda yaratuvchimga yozishingiz mumkin → @UmarjonMX";
       try {
-        await bot.sendMessage(chatId, tipsText);
+        const tipsImage = fs.readFileSync(path.join(process.cwd(), 'images', 'tips_pic.png'));
+        await bot.sendPhoto(chatId, tipsImage, { caption: tipsText });
       } catch (err) { console.error(err); }
       return res.status(200).send('OK');
     }
