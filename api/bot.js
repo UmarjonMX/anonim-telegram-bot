@@ -12,7 +12,7 @@ async function checkTextWithAI(text) {
       messages: [
         {
           role: "user",
-          content: "Sen qat'iy o'zbek tili moderatorisan. Matnda haqorat, so'kinish, 18+, sevgi izhori, romantika, reklama yoki linklar bo'lsa faqat 'YOMON' degan bitta so'z yoz. Agar matn mutlaqo toza bo'lsa, faqat 'TOZA' degan bitta so'z yoz. Tushuntirish, nuqta, vergul yoki boshqa so'z ishlatma. Matn: " + text,
+          content: "You are a strict content moderator. Analyze the following Uzbek text. If it contains profanity, insults, adult content (18+), romantic declarations, dating requests, ads, or links, reply ONLY with the word 'YOMON'. If the text is safe and normal, reply ONLY with the word 'TOZA'. Do not add punctuation or explanations. Text: " + text,
         },
       ],
       model: "llama-3.1-8b-instant",
