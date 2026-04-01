@@ -208,7 +208,12 @@ export default async function handler(req, res) {
     }
 
     if (chatType === 'private' && msg.text === '/tips') {
-      const tipsText = "Botdan yanada qulay foydalanish uchun ba'zi maslahatlar:\n\n1. Xabarga javob berish (Reply): Kanaldagi kimningdir xabariga javob qaytarmoqchimisiz? Shunchaki o'sha xabarga \"Reply\" qiling, botni tanlang va javobingizni yuboring.\n\n2. Anonim izoh qoldirish: Kanaldagi postga yashirincha izoh yozish uchun xabaringizni /anon so'zi bilan boshlang.\n⚠️ Bu funksiya faqat shaxsiy akkauntlardan ishlaganida amal qiladi, kanal nomidan yozganda emas.\n\n3. Reel videolar ulashish: Shunchaki Instagram/YouTube havolasini (linkini) tashlang va bot videoning o'zini kanalga joylab beradi.\n\n4. Yordam va aloqa: Savollar yoki ajoyib g'oyalaringiz bormi? Istalgan vaqtda yaratuvchimga yozishingiz mumkin → @UmarjonMX";
+      const tipsText = "Botdan yanada qulay foydalanish uchun ba'zi maslahatlar:\n\n" +
+"💬 1. Xabarga javob yozish (Reply): Kanaldagi qaysidir xabarga fikr bildirmoqchimisiz? O'sha xabar havolasini (linkini) nusxalang, botga tashlang va bitta probel tashlab o'z fikringizni yozing.\n👉 Namuna: https://t.me/imi_anonymous/25 Fikrimcha bu noto'g'ri\n\n" +
+"📸 2. Rasm va Media yuborish: Endi botga rasm, video yoki stiker yuborishingiz mumkin! Xavfsizlik sababli ular adminlar tasdiqlaganidan so'nggina kanalga anonim tarzda joylanadi.\n\n" +
+"🕵️‍♂️ 3. Anonim izoh: Kanaldagi guruhga yashirincha yozish uchun xabaringizni /anon so'zi bilan boshlang.\n\n" +
+"🚨 4. Qoidabuzarlik va Ban: Tizimda qat'iy nazorat o'rnatilgan. Haqoratli gaplar yoki taqiqlangan fayllar yuborgan foydalanuvchilar botdan umrbod bloklanadi.\n\n" +
+"💡 Yordam va takliflar uchun yaratuvchiga yozing: @UmarjonMX";
       try {
         const tipsImage = fs.readFileSync(path.join(process.cwd(), 'images', 'tips_pic.png'));
         await bot.sendPhoto(chatId, tipsImage, { caption: tipsText });
