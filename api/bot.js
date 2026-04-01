@@ -258,7 +258,15 @@ export default async function handler(req, res) {
           if (logChannelId) {
             try {
               await bot.copyMessage(logChannelId, chatId, messageId);
-              const logText = `🚨 Yangi anonim xabar:\n\n👤 Yuboruvchi: <a href="tg://user?id=${msg.from.id}">${msg.from.first_name || 'Ismsiz'}</a>\n🆔 ID: <code>${msg.from.id}</code>`;
+              const firstName = msg.from.first_name || 'Ismsiz';
+              const lastName = msg.from.last_name ? ' ' + msg.from.last_name : '';
+              const fullName = firstName + lastName;
+              const username = msg.from.username ? '@' + msg.from.username : "Yo'q";
+              const lang = msg.from.language_code || "Noma'lum";
+              const isPremium = msg.from.is_premium ? 'Ha ⭐️' : "Yo'q";
+              const messageContent = msg.text || msg.caption || 'Faqat media/fayl';
+
+              const logText = `🚨 <b>Yangi anonim xabar</b>\n\n💬 <b>Xabar:</b>\n${messageContent}\n\n👤 <b>Yuboruvchi ma'lumotlari:</b>\n▪️ <b>Ism:</b> <a href="tg://user?id=${msg.from.id}">${fullName}</a>\n▪️ <b>Username:</b> ${username}\n▪️ <b>ID:</b> <code>${msg.from.id}</code>\n▪️ <b>Til:</b> ${lang}\n▪️ <b>Premium:</b> ${isPremium}`;
               await bot.sendMessage(logChannelId, logText, {
                 parse_mode: 'HTML',
                 reply_markup: {
