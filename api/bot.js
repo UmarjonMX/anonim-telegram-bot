@@ -111,8 +111,34 @@ export default async function handler(req, res) {
           console.error('Error unbanning:', err);
           await bot.answerCallbackQuery(query.id, { text: "Xatolik yuz berdi.", show_alert: true });
         }
+      } else if (data.startsWith('approve_')) {
+        const parts = data.split('_');
+        const origChatId = parts[1];
+        const origMsgId = parts[2];
+        try {
+          await bot.copyMessage(channelId, origChatId, origMsgId);
+          await bot.editMessageText("✅ Media tasdiqlandi va kanalga joylandi!", {
+            chat_id: message.chat.id,
+            message_id: message.message_id
+          });
+          await bot.answerCallbackQuery(query.id, { text: "Kanalga joylandi!" });
+        } catch (err) {
+          console.error('Error approving media:', err);
+          await bot.answerCallbackQuery(query.id, { text: "Xatolik yuz berdi.", show_alert: true });
+        }
+      } else if (data.startsWith('reject_')) {
+        try {
+          await bot.editMessageText("❌ Media rad etildi.", {
+            chat_id: message.chat.id,
+            message_id: message.message_id
+          });
+          await bot.answerCallbackQuery(query.id, { text: "Rad etildi!" });
+        } catch (err) {
+          console.error('Error rejecting media:', err);
+        }
       }
       return res.status(200).send('OK');
+
     }
 
     // Message Extraction
@@ -125,14 +151,35 @@ export default async function handler(req, res) {
     const messageId = msg.message_id;
     const chatType = msg.chat.type;
 
-    // STRICT GIF/Media Block
-    if (msg.animation || msg.sticker || msg.document) {
+    // Media Manual Approval Logic
+    if (msg.photo || msg.video || msg.animation || msg.document || msg.audio || msg.voice || msg.sticker) {
       if (chatType === 'private') {
-        await bot.sendMessage(chatId, "🚫 Kechirasiz, anonim tarzda GIF yoki fayl yuborish taqiqlangan.").catch(console.error);
+        if (logChannelId) {
+          try {
+            await bot.copyMessage(logChannelId, chatId, messageId);
+            const mediaLogText = `📸 <b>Yangi Media Xabar</b>\n\n👤 <b>Yuboruvchi:</b> <a href="tg://user?id=${msg.from.id}">${msg.from.first_name || 'Ismsiz'}</a>\n🆔 ID: <code>${msg.from.id}</code>\n\nQuyidagi tugmalar orqali tasdiqlang yoki rad eting:`;
+            await bot.sendMessage(logChannelId, mediaLogText, {
+              parse_mode: 'HTML',
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "✅ Tasdiqlash va Kanalga joylash", callback_data: `approve_${chatId}_${messageId}` }],
+                  [{ text: "❌ Rad etish", callback_data: `reject_${chatId}_${messageId}` }],
+                  [{ text: "🚫 Qoidabuzarni Ban qilish", callback_data: `ban_${msg.from.id}` }]
+                ]
+              }
+            });
+            await bot.sendMessage(chatId, "⏳ Media faylingiz adminga tekshirish uchun yuborildi. Tasdiqlangandan so'ng kanalga joylanadi.");
+          } catch (err) {
+            console.error('Media log error:', err);
+          }
+        } else {
+          await bot.sendMessage(chatId, "🚫 Media qabul qilish vaqtincha yopiq.");
+        }
+        return res.status(200).send('OK');
       } else if (chatType === 'supergroup' || chatType === 'group') {
         await bot.deleteMessage(chatId, messageId).catch(console.error);
+        return res.status(200).send('OK');
       }
-      return res.status(200).send('OK');
     }
 
     // Start Command
