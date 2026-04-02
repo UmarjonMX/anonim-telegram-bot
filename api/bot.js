@@ -213,7 +213,7 @@ export default async function handler(req, res) {
 "📸 2. Rasm va Media yuborish: Endi botga rasm, video yoki stiker yuborishingiz mumkin! Xavfsizlik sababli ular adminlar tasdiqlaganidan so'nggina kanalga anonim tarzda joylanadi.\n\n" +
 "🕵️‍♂️ 3. Anonim izoh: Kanaldagi guruhga yashirincha yozish uchun xabaringizni /anon so'zi bilan boshlang.\n\n" +
 "🚨 4. Qoidabuzarlik va Ban: Tizimda qat'iy nazorat o'rnatilgan. Haqoratli gaplar yoki taqiqlangan fayllar yuborgan foydalanuvchilar botdan umrbod bloklanadi.\n\n" +
-"💡 Yordam va takliflar uchun yaratuvchiga yozing: @UmarjonMX";
+"💡 Yordam va takliflar uchun yaratuvchiga yozing: ";
       try {
         const tipsImage = fs.readFileSync(path.join(process.cwd(), 'images', 'tips_pic.png'));
         await bot.sendPhoto(chatId, tipsImage, { caption: tipsText });
@@ -286,6 +286,28 @@ export default async function handler(req, res) {
       } catch (err) {
         console.error("Membership check error (Bot likely not admin in channel):", err.message);
         // If there's an error (e.g. bot is not admin), we log it but do not block the user, to prevent the bot from breaking completely.
+      }
+
+      // Static Blacklist Check (Layer 1)
+      if (textToCheck) {
+        const lowerText = textToCheck.toLowerCase();
+        // Arrays of common local slang and curse words
+        const badWords = ['zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog', 'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'suka', 'xuy', 'xaromi', 'blat', 'kotiga'];
+        const isBad = badWords.some(word => lowerText.includes(word));
+        
+        if (isBad) {
+          if (logChannelId) {
+            try {
+              const logText = `🚫 <b>Avto-Blok (Qora ro'yxat)</b>\n\n💬 <b>Xabar:</b>\n${textToCheck}\n\n👤 <b>Yuboruvchi:</b> <a href="tg://user?id=${msg.from.id}">${msg.from.first_name || 'Ismsiz'}</a>\n🆔 <code>${msg.from.id}</code>`;
+              await bot.sendMessage(logChannelId, logText, {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: [[{ text: "🚫 Ban qilish", callback_data: `ban_${msg.from.id}` }]] }
+              });
+            } catch (e) { console.error('Log error in blacklist:', e); }
+          }
+          await bot.sendMessage(chatId, "🚫 Xabaringizda taqiqlangan so'zlar aniqlandi va tizim tomonidan rad etildi.");
+          return res.status(200).send('OK');
+        }
       }
 
       const aiResult = await checkTextWithAI(textToCheck);
