@@ -13,17 +13,35 @@ async function checkTextWithAI(text) {
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         {
-          role: "user",
-          content: "You are a strict content moderator. Analyze the following Uzbek text. If it contains profanity, insults, adult content (18+), romantic declarations, dating requests, ads, or links, reply ONLY with the word 'YOMON'. If the text is safe and normal, reply ONLY with the word 'TOZA'. Do not add punctuation or explanations. Text: " + text,
+          role: "system",
+          content: `Siz qat'iy Telegram kanal moderatorisiz. Vazifangiz xabarlarni filtrlash.
+Qat'iyan TAQIQLANGAN mavzular (ular uchun faqat 'false' qaytaring):
+
+So'kinish, haqorat, tahdid, kamsitish.
+
+Sevgi izhorlari, romantika, shaxsiy munosabatlar qidirish, qizlar/yigitlarga gap otish (masalan: sevaman, sog'indim, tanishaylik).
+
+Ma'nosiz xabarlar (spam, "asdasd", faqat bitta harf yoki belgi).
+
+Siyosiy yoki diniy muhokamalar.
+
+RUXSAT BERILGAN mavzular ('true' qaytaring):
+Fikrlashish, savollar, ta'lim, mantiqiy gaplar va foydali ma'lumotlar.
+
+Faqat bitta so'z bilan javob bering: ruxsat etilsa "true", taqiqlansa "false". Hech qanday qo'shimcha so'z yozmang.`
         },
+        {
+          role: "user",
+          content: text
+        }
       ],
       model: "llama-3.1-8b-instant",
       temperature: 0,
     });
-    const responseText = chatCompletion.choices[0]?.message?.content || "";
+    const responseText = chatCompletion.choices[0]?.message?.content?.trim().toLowerCase() || "";
     console.log("User Text:", text);
     console.log("Groq AI Response:", responseText);
-    return responseText.includes("TOZA");
+    return responseText.includes("true");
   } catch (error) {
     console.error("Groq AI Error:", error);
     return "ERROR: " + error.message;
@@ -292,7 +310,7 @@ export default async function handler(req, res) {
       if (textToCheck) {
         const lowerText = textToCheck.toLowerCase();
         // Arrays of common local slang and curse words
-        const badWords = ['zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog', 'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'suka', 'xuy', 'xaromi', 'blat', 'kotiga'];
+        const badWords = ['bot', 'zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog', 'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'suka', 'xuy', 'xaromi', 'blat', 'kotiga', 'sevgi', 'sevaman', 'sogindim', 'jonim', 'asalim', 'yaxshi koraman'];
         const isBad = badWords.some(word => lowerText.includes(word));
         
         if (isBad) {
