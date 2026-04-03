@@ -349,9 +349,19 @@ export default async function handler(req, res) {
 
       // Static Blacklist Check (Layer 1 - Ultimate Normalization)
       const rawText = msg.text || msg.caption || "";
+      let aiReadyText = rawText; // This will hold the completely stripped text for the AI
+
       if (rawText) {
-        // 1. Normalize Unicode (fixes weird fonts/styles like 𝓴𝓸𝓽 -> kot)
-        let standardText = rawText.normalize('NFKC').toLowerCase();
+        // 1. Ultimate Unicode Stripping
+        // - normalize('NFKC') fixes weird fonts (bold, italic, monospace)
+        // - replace(/[\p{M}]/gu, '') removes Combining Diacritical Marks (strikethrough, underline)
+        // - replace(/[\u200B-\u200D\uFEFF]/g, '') removes invisible zero-width characters
+        aiReadyText = rawText
+          .normalize('NFKC')
+          .replace(/[\p{M}]/gu, '')
+          .replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+        let standardText = aiReadyText.toLowerCase();
 
         // 2. Normalize Uzbek specific characters & Leetspeak
         standardText = standardText.replace(/[og]['`']/g, match => match[0])
@@ -361,12 +371,9 @@ export default async function handler(req, res) {
                                    .replace(/\$/g, 's')
                                    .replace(/3/g, 'e');
 
-        // 3. Process individual words (split by spaces) for strict root checking
+        // 3. Process individual words
         const rawWords = standardText.split(/\s+/);
-        const processedWords = rawWords.map(w => {
-          // Remove symbols and squeeze duplicate letters (e.g., kkooo::tt -> kot)
-          return w.replace(/[\W_]+/g, '').replace(/(.)\1+/g, '$1');
-        });
+        const processedWords = rawWords.map(w => w.replace(/[\W_]+/g, '').replace(/(.)\1+/g, '$1'));
 
         // 4. Process the whole text for spaced-out slurs (e.g., D A L B A N)
         const compressedText = standardText.replace(/[\W_]+/g, '');
@@ -381,16 +388,12 @@ export default async function handler(req, res) {
         ];
         const strictRoots = ['kot', 'qis', 'bot'];
 
-        // Check long words in the compressed/squeezed text
         const isBadWord = badWords.some(word => {
           const cleanWord = word.replace(/\s+/g, '');
           return compressedText.includes(cleanWord) || squeezedText.includes(cleanWord);
         });
 
-        // Check short root words strictly in the processed array to avoid false positives
         const isStrictRoot = processedWords.some(w => strictRoots.includes(w));
-
-        // Check coded pricing slang
         const isBadPattern = /soati(ga)?\d+ming/i.test(compressedText) || /11sinf\d+ming/i.test(compressedText);
 
         const isBad = isBadWord || isStrictRoot || isBadPattern;
@@ -410,7 +413,7 @@ export default async function handler(req, res) {
         }
       }
 
-      const aiResult = await checkTextWithAI(textToCheck);
+      const aiResult = await checkTextWithAI(aiReadyText);
       if (typeof aiResult === 'string' && aiResult.startsWith("ERROR: ")) {
         await bot.sendMessage(chatId, "⚠️ AI Xatosi: " + aiResult);
         return res.status(200).send('OK');
