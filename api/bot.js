@@ -1,7 +1,14 @@
 import TelegramBot from 'node-telegram-bot-api';
 import Groq from 'groq-sdk';
+import { Redis } from '@upstash/redis';
 import fs from 'fs';
 import path from 'path';
+
+// Initialize Redis client
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
 
 // Initialize the bot and Groq AI at the top.
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -151,6 +158,21 @@ export default async function handler(req, res) {
         } catch (err) {
           console.error('Error rejecting media:', err);
         }
+      } else if (data.startsWith('toggle_')) {
+        const newState = data.split('_')[1];
+        try {
+          await redis.set('auto_delete_comments', newState);
+          const btnText = newState === 'on' ? '🟢 O\'chirish' : '🔴 Yoqish';
+          await bot.editMessageText(`⚙️ <b>Guruh (Izohlar) media filtri:</b> ${newState === 'on' ? 'Yoniq' : 'O\'chiq'}\n\nO'chiq holatda guruhga hamma narsa tashlash mumkin.`, {
+            chat_id: message.chat.id,
+            message_id: message.message_id,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [[{ text: btnText, callback_data: `toggle_${newState === 'on' ? 'off' : 'on'}` }]]
+            }
+          });
+          await bot.answerCallbackQuery(query.id, { text: `Holat o'zgardi: ${newState}` });
+        } catch(e) { console.error('Toggle error:', e); }
       }
       return res.status(200).send('OK');
 
@@ -192,7 +214,14 @@ export default async function handler(req, res) {
         }
         return res.status(200).send('OK');
       } else if (chatType === 'supergroup' || chatType === 'group') {
-        await bot.deleteMessage(chatId, messageId).catch(console.error);
+        try {
+          const autoDeleteState = await redis.get('auto_delete_comments');
+          if (autoDeleteState !== 'off') { // Default is ON
+            if (!msg.animation && !msg.sticker) {
+              await bot.deleteMessage(chatId, messageId).catch(console.error);
+            }
+          }
+        } catch(e) { console.error('Group media check error:', e); }
         return res.status(200).send('OK');
       }
     }
@@ -233,6 +262,21 @@ export default async function handler(req, res) {
         const tipsImage = fs.readFileSync(path.join(process.cwd(), 'images', 'tips_pic.png'));
         await bot.sendPhoto(chatId, tipsImage, { caption: tipsText });
       } catch (err) { console.error(err); }
+      return res.status(200).send('OK');
+    }
+
+    if (chatType === 'private' && msg.text === '/sozlamalar' && msg.from.id.toString() === process.env.ADMIN_ID) {
+      try {
+        const state = await redis.get('auto_delete_comments') || 'on';
+        const btnText = state === 'on' ? '🟢 O\'chirish' : '🔴 Yoqish';
+        const newState = state === 'on' ? 'off' : 'on';
+        await bot.sendMessage(chatId, `⚙️ <b>Guruh (Izohlar) media filtri:</b> ${state === 'on' ? 'Yoniq' : 'O\'chiq'}\n\nO'chiq holatda guruhga hamma narsa tashlash mumkin.`, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[{ text: btnText, callback_data: `toggle_${newState}` }]]
+          }
+        });
+      } catch(e) { console.error('Settings error:', e); }
       return res.status(200).send('OK');
     }
 

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "node-telegram-bot-api": "^0.66.0",
-    "groq-sdk": "^0.3.0"
+    "groq-sdk": "^0.3.0",
+    "@upstash/redis": "^1.31.0"
   }
 }
