@@ -377,7 +377,7 @@ export default async function handler(req, res) {
           'zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog',
           'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'dalboyob', 'suka', 'xuy', 'xaromi',
           'blat', 'kotiga', 'kotini', 'sevgi', 'sevaman', 'sogindim', 'jonim',
-          'asalim', 'yaxshikoraman'
+          'asalim', 'yaxshikoraman', 'itaraman', 'itarib'
         ];
         const strictRoots = ['kot', 'qis', 'bot'];
 
