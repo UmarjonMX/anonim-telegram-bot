@@ -23,6 +23,7 @@ QACHON "false" QAYTARISH KERAK (Faqat shu holatlarda):
 2. Sevgi izhorlari, romantika, qiz/yigitlarga gap otish (masalan: "sevaman", "sog'indim", "tanishaylik", "jonim").
 3. Mutlaqo ma'nosiz harflar to'plami (masalan: "asdasdas", "123123").
 4. Ochiqchasiga diniy yoki siyosiy janjalli mavzular.
+5. Yashirin fohishalik, eskort xizmatlari yoki jinsiy aloqa narxlarini anglatuvchi shifrli gaplar (masalan: "soati 100 ming", "11 sinf uchun 50 ming", "soatiga nechi pul").
 
 Yodda tuting: Agar xabarda yomon narsa bo'lmasa, doim "true" qaytaring. Javobingiz faqat "true" yoki "false" bo'lsin.`
         },
@@ -307,7 +308,9 @@ export default async function handler(req, res) {
         const lowerText = textToCheck.toLowerCase();
         // Arrays of common local slang and curse words
         const badWords = ['bot', 'zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog', 'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'suka', 'xuy', 'xaromi', 'blat', 'kotiga', 'sevgi', 'sevaman', 'sogindim', 'jonim', 'asalim', 'yaxshi koraman'];
-        const isBad = badWords.some(word => lowerText.includes(word));
+        const isBadWord = badWords.some(word => word === 'bot' ? new RegExp(`\\b${word}\\b`, 'i').test(lowerText) : lowerText.includes(word));
+        const isBadPattern = /soati(ga)?\s*\d+\s*ming/i.test(lowerText) || /11[- ]?sinf.*\d+\s*ming/i.test(lowerText);
+        const isBad = isBadWord || isBadPattern;
         
         if (isBad) {
           if (logChannelId) {
