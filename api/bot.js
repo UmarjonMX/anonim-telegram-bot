@@ -349,22 +349,42 @@ export default async function handler(req, res) {
 
       // Static Blacklist Check (Layer 1)
       if (textToCheck) {
+        // 1. Convert to lowercase
         const lowerText = textToCheck.toLowerCase();
-        // Compressed text: remove all spaces, punctuation, and non-alphanumeric characters for strict matching
-        const compressedText = lowerText.replace(/[\W_]+/g, '');
 
-        const badWords = ['bot', 'zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog', 'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'dalboyob', 'suka', 'xuy', 'xaromi', 'blat', 'kotiga', 'sevgi', 'sevaman', 'sogindim', 'jonim', 'asalim', 'yaxshi koraman'];
+        // 2. Normalize Uzbek characters (e.g., o', g', sh, ch) to make matching easier.
+        // Replace "o'", "o`", "o'" with simply "o" (and same for g) to catch "ko't" -> "kot"
+        const normalizedText = lowerText.replace(/[og]['`']/g, match => match[0]);
 
-        // Check standard text with boundaries (for 'bot') and check compressed text for spaced-out slurs
+        // 3. Compressed text: remove all non-alphanumeric characters (spaces, punctuation)
+        const compressedText = normalizedText.replace(/[\W_]+/g, '');
+
+        // Updated aggressive blacklist with root words
+        const badWords = [
+          'bot', 'zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog',
+          'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'dalboyob', 'suka', 'xuy', 'xaromi',
+          'blat', 'kotiga', 'kotini', 'qis', 'sevgi', 'sevaman', 'sogindim', 'jonim',
+          'asalim', 'yaxshi koraman'
+        ];
+
+        // We need to carefully handle "kot" and "qis" so we don't block words like "kotib" or "qisqa".
+        // Therefore, we use exact word boundary matching for the dangerous root words.
+        const strictRoots = ['kot', 'qis'];
+
         const isBadWord = badWords.some(word => {
           if (word === 'bot') {
-            return new RegExp(`\\b${word}\\b`, 'i').test(lowerText);
+            return new RegExp(`\\b${word}\\b`, 'i').test(normalizedText);
           }
-          return lowerText.includes(word) || compressedText.includes(word.replace(/\s+/g, ''));
+          return normalizedText.includes(word) || compressedText.includes(word.replace(/\s+/g, ''));
         });
 
-        const isBadPattern = /soati(ga)?\s*\d+\s*ming/i.test(lowerText) || /11[- ]?sinf.*\d+\s*ming/i.test(lowerText);
-        const isBad = isBadWord || isBadPattern;
+        const isStrictRoot = strictRoots.some(root => {
+          return new RegExp(`\\b${root}\\b`, 'i').test(normalizedText);
+        });
+
+        const isBadPattern = /soati(ga)?\s*\d+\s*ming/i.test(normalizedText) || /11[- ]?sinf.*\d+\s*ming/i.test(normalizedText);
+
+        const isBad = isBadWord || isStrictRoot || isBadPattern;
         
         if (isBad) {
           if (logChannelId) {
