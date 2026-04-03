@@ -347,49 +347,58 @@ export default async function handler(req, res) {
         // If there's an error (e.g. bot is not admin), we log it but do not block the user, to prevent the bot from breaking completely.
       }
 
-      // Static Blacklist Check (Layer 1)
-      if (textToCheck) {
-        // 1. Convert to lowercase
-        const lowerText = textToCheck.toLowerCase();
+      // Static Blacklist Check (Layer 1 - Ultimate Normalization)
+      const rawText = msg.text || msg.caption || "";
+      if (rawText) {
+        // 1. Normalize Unicode (fixes weird fonts/styles like 𝓴𝓸𝓽 -> kot)
+        let standardText = rawText.normalize('NFKC').toLowerCase();
 
-        // 2. Normalize Uzbek characters (e.g., o', g', sh, ch) to make matching easier.
-        // Replace "o'", "o`", "o'" with simply "o" (and same for g) to catch "ko't" -> "kot"
-        const normalizedText = lowerText.replace(/[og]['`']/g, match => match[0]);
+        // 2. Normalize Uzbek specific characters & Leetspeak
+        standardText = standardText.replace(/[og]['`']/g, match => match[0])
+                                   .replace(/0/g, 'o')
+                                   .replace(/@/g, 'a')
+                                   .replace(/[1!]/g, 'i')
+                                   .replace(/\$/g, 's')
+                                   .replace(/3/g, 'e');
 
-        // 3. Compressed text: remove all non-alphanumeric characters (spaces, punctuation)
-        const compressedText = normalizedText.replace(/[\W_]+/g, '');
+        // 3. Process individual words (split by spaces) for strict root checking
+        const rawWords = standardText.split(/\s+/);
+        const processedWords = rawWords.map(w => {
+          // Remove symbols and squeeze duplicate letters (e.g., kkooo::tt -> kot)
+          return w.replace(/[\W_]+/g, '').replace(/(.)\1+/g, '$1');
+        });
 
-        // Updated aggressive blacklist with root words
+        // 4. Process the whole text for spaced-out slurs (e.g., D A L B A N)
+        const compressedText = standardText.replace(/[\W_]+/g, '');
+        const squeezedText = compressedText.replace(/(.)\1+/g, '$1');
+
+        // Dictionaries
         const badWords = [
-          'bot', 'zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog',
+          'zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog',
           'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'dalboyob', 'suka', 'xuy', 'xaromi',
-          'blat', 'kotiga', 'kotini', 'qis', 'sevgi', 'sevaman', 'sogindim', 'jonim',
-          'asalim', 'yaxshi koraman'
+          'blat', 'kotiga', 'kotini', 'sevgi', 'sevaman', 'sogindim', 'jonim',
+          'asalim', 'yaxshikoraman'
         ];
+        const strictRoots = ['kot', 'qis', 'bot'];
 
-        // We need to carefully handle "kot" and "qis" so we don't block words like "kotib" or "qisqa".
-        // Therefore, we use exact word boundary matching for the dangerous root words.
-        const strictRoots = ['kot', 'qis'];
-
+        // Check long words in the compressed/squeezed text
         const isBadWord = badWords.some(word => {
-          if (word === 'bot') {
-            return new RegExp(`\\b${word}\\b`, 'i').test(normalizedText);
-          }
-          return normalizedText.includes(word) || compressedText.includes(word.replace(/\s+/g, ''));
+          const cleanWord = word.replace(/\s+/g, '');
+          return compressedText.includes(cleanWord) || squeezedText.includes(cleanWord);
         });
 
-        const isStrictRoot = strictRoots.some(root => {
-          return new RegExp(`\\b${root}\\b`, 'i').test(normalizedText);
-        });
+        // Check short root words strictly in the processed array to avoid false positives
+        const isStrictRoot = processedWords.some(w => strictRoots.includes(w));
 
-        const isBadPattern = /soati(ga)?\s*\d+\s*ming/i.test(normalizedText) || /11[- ]?sinf.*\d+\s*ming/i.test(normalizedText);
+        // Check coded pricing slang
+        const isBadPattern = /soati(ga)?\d+ming/i.test(compressedText) || /11sinf\d+ming/i.test(compressedText);
 
         const isBad = isBadWord || isStrictRoot || isBadPattern;
-        
+
         if (isBad) {
           if (logChannelId) {
             try {
-              const logText = `🚫 <b>Avto-Blok (Qora ro'yxat)</b>\n\n💬 <b>Xabar:</b>\n${textToCheck}\n\n👤 <b>Yuboruvchi:</b> <a href="tg://user?id=${msg.from.id}">${msg.from.first_name || 'Ismsiz'}</a>\n🆔 <code>${msg.from.id}</code>`;
+              const logText = `🚫 <b>Avto-Blok (Qora ro'yxat)</b>\n\n💬 <b>Xabar:</b>\n${rawText}\n\n👤 <b>Yuboruvchi:</b> <a href="tg://user?id=${msg.from.id}">${msg.from.first_name || 'Ismsiz'}</a>\n🆔 <code>${msg.from.id}</code>`;
               await bot.sendMessage(logChannelId, logText, {
                 parse_mode: 'HTML',
                 reply_markup: { inline_keyboard: [[{ text: "🚫 Ban qilish", callback_data: `ban_${msg.from.id}` }]] }
