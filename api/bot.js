@@ -347,23 +347,26 @@ export default async function handler(req, res) {
         // If there's an error (e.g. bot is not admin), we log it but do not block the user, to prevent the bot from breaking completely.
       }
 
-      // Static Blacklist Check (Layer 1 - Ultimate Normalization)
+      // Static Blacklist Check (Layer 1 - The Terminator)
       const rawText = msg.text || msg.caption || "";
-      let aiReadyText = rawText; // This will hold the completely stripped text for the AI
+      let aiReadyText = rawText;
 
       if (rawText) {
-        // 1. Ultimate Unicode Stripping
-        // - normalize('NFKC') fixes weird fonts (bold, italic, monospace)
-        // - replace(/[\p{M}]/gu, '') removes Combining Diacritical Marks (strikethrough, underline)
-        // - replace(/[\u200B-\u200D\uFEFF]/g, '') removes invisible zero-width characters
+        // 1. Deep Clean: Strip Unicode, and completely remove Telegram Markdown formatting symbols
+        // This destroys Spoilers (||), Quotes (>), Code (`), Bold (*), Italic (_), Strikethrough (~)
         aiReadyText = rawText
           .normalize('NFKC')
           .replace(/[\p{M}]/gu, '')
-          .replace(/[\u200B-\u200D\uFEFF]/g, '');
+          .replace(/[\u200B-\u200D\uFEFF]/g, '')
+          .replace(/[*_~`|>]/g, ' ');
 
         let standardText = aiReadyText.toLowerCase();
 
-        // 2. Normalize Uzbek specific characters & Leetspeak
+        // 2. Cyrillic Homoglyph Attack Prevention (Russian letters masking as Latin)
+        const homoglyphs = {'а':'a', 'о':'o', 'е':'e', 'с':'s', 'р':'p', 'х':'x', 'у':'y', 'к':'k', 'м':'m'};
+        standardText = standardText.replace(/[аоесрхукм]/g, m => homoglyphs[m] || m);
+
+        // 3. Normalize Uzbek specific characters & Leetspeak
         standardText = standardText.replace(/[og]['`']/g, match => match[0])
                                    .replace(/0/g, 'o')
                                    .replace(/@/g, 'a')
@@ -371,11 +374,10 @@ export default async function handler(req, res) {
                                    .replace(/\$/g, 's')
                                    .replace(/3/g, 'e');
 
-        // 3. Process individual words
+        // 4. Word-by-word and squeezed processing for spaced-out slurs
         const rawWords = standardText.split(/\s+/);
         const processedWords = rawWords.map(w => w.replace(/[\W_]+/g, '').replace(/(.)\1+/g, '$1'));
 
-        // 4. Process the whole text for spaced-out slurs (e.g., D A L B A N)
         const compressedText = standardText.replace(/[\W_]+/g, '');
         const squeezedText = compressedText.replace(/(.)\1+/g, '$1');
 
