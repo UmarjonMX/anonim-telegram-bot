@@ -350,9 +350,19 @@ export default async function handler(req, res) {
       // Static Blacklist Check (Layer 1)
       if (textToCheck) {
         const lowerText = textToCheck.toLowerCase();
-        // Arrays of common local slang and curse words
-        const badWords = ['bot', 'zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog', 'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'suka', 'xuy', 'xaromi', 'blat', 'kotiga', 'sevgi', 'sevaman', 'sogindim', 'jonim', 'asalim', 'yaxshi koraman'];
-        const isBadWord = badWords.some(word => word === 'bot' ? new RegExp(`\\b${word}\\b`, 'i').test(lowerText) : lowerText.includes(word));
+        // Compressed text: remove all spaces, punctuation, and non-alphanumeric characters for strict matching
+        const compressedText = lowerText.replace(/[\W_]+/g, '');
+
+        const badWords = ['bot', 'zaybal', 'zaibal', 'ble', 'blya', 'jalap', 'qotaq', 'qotoq', 'qotog', 'sk', 'sikim', 'gandon', 'pidar', 'dalba', 'dalboyob', 'suka', 'xuy', 'xaromi', 'blat', 'kotiga', 'sevgi', 'sevaman', 'sogindim', 'jonim', 'asalim', 'yaxshi koraman'];
+
+        // Check standard text with boundaries (for 'bot') and check compressed text for spaced-out slurs
+        const isBadWord = badWords.some(word => {
+          if (word === 'bot') {
+            return new RegExp(`\\b${word}\\b`, 'i').test(lowerText);
+          }
+          return lowerText.includes(word) || compressedText.includes(word.replace(/\s+/g, ''));
+        });
+
         const isBadPattern = /soati(ga)?\s*\d+\s*ming/i.test(lowerText) || /11[- ]?sinf.*\d+\s*ming/i.test(lowerText);
         const isBad = isBadWord || isBadPattern;
         
