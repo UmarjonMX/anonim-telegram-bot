@@ -158,15 +158,42 @@ export default async function handler(req, res) {
         } catch (err) {
           console.error('Error rejecting media:', err);
         }
-      } else if (data.startsWith('info_')) {
-        const userId = data.split('_')[1];
+      } else if (data.startsWith('i|')) {
+        const parts = data.split('|');
+        const senderId = parts[1];
+        const senderUsername = parts[2];
+        const senderName = parts[3];
+
+        const originalMessage = query.message;
+        const originalText = originalMessage.text || originalMessage.caption || "";
+
+        // Construct the appended text
+        const appendedInfo = `\n\n👤 YUBORUVCHI MA'LUMOTI:\nID: ${senderId}\nUsername: @${senderUsername}\nIsm: ${senderName}`;
+        const newText = originalText + appendedInfo;
+
+        // Keep only the first row of buttons (Approve/Ban) and drop the "See Sender" button
+        const newKeyboard = {
+            inline_keyboard: [ originalMessage.reply_markup.inline_keyboard[0] ]
+        };
+
         try {
-          await bot.answerCallbackQuery(query.id, {
-            text: `Yuboruvchi haqida ma'lumot:\nUser ID: ${userId}`,
-            show_alert: true 
-          });
+            if (originalMessage.photo || originalMessage.video || originalMessage.document || originalMessage.voice || originalMessage.animation || originalMessage.audio) {
+                await bot.editMessageCaption(newText, {
+                    chat_id: originalMessage.chat.id,
+                    message_id: originalMessage.message_id,
+                    reply_markup: newKeyboard
+                });
+            } else {
+                await bot.editMessageText(newText, {
+                    chat_id: originalMessage.chat.id,
+                    message_id: originalMessage.message_id,
+                    reply_markup: newKeyboard
+                });
+            }
+            await bot.answerCallbackQuery(query.id, { text: "Ma'lumotlar xabarga qo'shildi!" });
         } catch (err) {
-          console.error('Error handling info:', err);
+            console.error("Error editing message:", err);
+            await bot.answerCallbackQuery(query.id, { text: "Xatolik yuz berdi (Balki eski xabardir).", show_alert: true });
         }
       } else if (data.startsWith('toggle_')) {
         const newState = data.split('_')[1];
@@ -204,9 +231,14 @@ export default async function handler(req, res) {
         if (logChannelId) {
           try {
             const rawText = msg.text || msg.caption || "";
-            const adminMention = "\n\n⚠️ @Umar_ibn_Hattab Yangi media tekshirish uchun keldi!";
+            const hasMedia = msg.photo || msg.video || msg.voice || msg.audio || msg.document || msg.animation || msg.sticker;
+            const adminMention = hasMedia ? "\n\n⚠️ @UmarjonMX Yangi media tekshirish uchun keldi!" : "";
             const textToSend = rawText ? rawText + adminMention : adminMention;
             
+            const safeUsername = msg.from.username ? msg.from.username.substring(0, 20) : "yo'q";
+            const safeFirstName = msg.from.first_name ? msg.from.first_name.substring(0, 15) : "yo'q";
+            const infoCbData = `i|${chatId}|${safeUsername}|${safeFirstName}`;
+
             const adminKeyboard = {
               inline_keyboard: [
                 [
@@ -215,7 +247,7 @@ export default async function handler(req, res) {
                   { text: '❌ Ban', callback_data: `ban_${chatId}` }
                 ],
                 [
-                  { text: "🕵️‍♂️ Yuboruvchini ko'rish", callback_data: `info_${chatId}` }
+                  { text: "🕵️‍♂️ Yuboruvchini ko'rish", callback_data: infoCbData }
                 ]
               ]
             };
@@ -512,13 +544,17 @@ export default async function handler(req, res) {
           if (logChannelId) {
             try {
               const messageContent = msg.text || msg.caption || '';
+              const safeUsername = msg.from.username ? msg.from.username.substring(0, 20) : "yo'q";
+              const safeFirstName = msg.from.first_name ? msg.from.first_name.substring(0, 15) : "yo'q";
+              const infoCbData = `i|${msg.from.id}|${safeUsername}|${safeFirstName}`;
+
               const adminKeyboard = {
                 inline_keyboard: [
                   [
                     { text: "🚫 Ban qilish", callback_data: `ban_${msg.from.id}` }
                   ],
                   [
-                    { text: "🕵️‍♂️ Yuboruvchini ko'rish", callback_data: `info_${msg.from.id}` }
+                    { text: "🕵️‍♂️ Yuboruvchini ko'rish", callback_data: infoCbData }
                   ]
                 ]
               };
