@@ -16,8 +16,11 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Simple In-Memory Cache for Rate Limiting and Retry Deduplication
 // (Module-level: shared within a single serverless instance, resets on cold start)
 const processedMessages = new Set();
-const userLastMessageTime = new Map();
-const RATE_LIMIT_MS = 2000; // 2 seconds between messages per user
+// Advanced Spam Penalty Cache
+const userActivity = new Map();
+const SPAM_LIMIT = 4; // Max messages allowed in the window before penalty
+const TIME_WINDOW_MS = 5000; // 5 seconds window
+const PENALTY_MS = 60000; // 1 minute penalty timeout (can be adjusted)
 
 // AI Function
 async function checkTextWithAI(text) {
@@ -293,14 +296,49 @@ export default async function handler(req, res) {
       processedMessages.delete(processedMessages.values().next().value);
     }
 
-    // 3. Flood Control — rate limiting per user (2 seconds)
+    // 3. Advanced Spam Control & Penalty Timer
     const now = Date.now();
-    const lastTime = userLastMessageTime.get(chatId) || 0;
-    if (now - lastTime < RATE_LIMIT_MS) {
-      console.log(`Rate limit hit for user: ${chatId}`);
-      return res.status(200).send('OK');
+    let userData = userActivity.get(chatId) || { count: 0, startTime: now, penaltyUntil: 0 };
+
+    // Check if user is currently serving a penalty timeout
+    if (now < userData.penaltyUntil) {
+        const timeLeft = userData.penaltyUntil - now;
+        const minutes = Math.floor(timeLeft / 60000);
+        const seconds = Math.floor((timeLeft % 60000) / 1000);
+        const timeString = `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        
+        try {
+            await bot.sendMessage(chatId, `⏳ Kuting! Yana ${timeString} vaqtingiz qoldi.`);
+        } catch (e) {
+            console.error("Warning send error:", e);
+        }
+        return res.status(200).send('OK');
     }
-    userLastMessageTime.set(chatId, now);
+
+    // Reset the time window if it has passed
+    if (now - userData.startTime > TIME_WINDOW_MS) {
+        userData.count = 1;
+        userData.startTime = now;
+    } else {
+        userData.count++;
+        // Trigger penalty if they hit the spam limit
+        if (userData.count >= SPAM_LIMIT) {
+            userData.penaltyUntil = now + PENALTY_MS;
+            userActivity.set(chatId, userData);
+            
+            const minutes = Math.floor(PENALTY_MS / 60000);
+            const seconds = Math.floor((PENALTY_MS % 60000) / 1000);
+            const timeString = `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+            try {
+                await bot.sendMessage(chatId, `🚫 Spam aniqlandi! Iltimos, ${timeString} kuting.`);
+            } catch (e) {
+                console.error("Penalty notice error:", e);
+            }
+            return res.status(200).send('OK');
+        }
+    }
+    userActivity.set(chatId, userData);
 
     // 4. Basic Media Group Handling
     // Only process the first item of an album to avoid spamming admin channel
