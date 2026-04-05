@@ -231,8 +231,43 @@ export default async function handler(req, res) {
     const messageId = msg.message_id;
     const chatType = msg.chat.type;
 
-    // Ignore messages originating from the Admin/Log channel itself
-    if (logChannelId && chatId.toString() === logChannelId.toString()) return res.status(200).send('OK');
+    // Admin Channel Logic: Handle Admin Replies
+    if (logChannelId && chatId.toString() === logChannelId.toString()) {
+        if (msg.reply_to_message) {
+            const replyTo = msg.reply_to_message;
+            let targetUserId = null;
+            
+            // Method A: Try to extract user ID from the callback_data of the first inline button
+            if (replyTo.reply_markup && replyTo.reply_markup.inline_keyboard && replyTo.reply_markup.inline_keyboard.length > 0) {
+                const firstButtonData = replyTo.reply_markup.inline_keyboard[0][0].callback_data;
+                if (firstButtonData && firstButtonData.startsWith('approve_')) {
+                    targetUserId = firstButtonData.split('_')[1];
+                } else if (firstButtonData && firstButtonData.startsWith('ban_')) {
+                    targetUserId = firstButtonData.split('_')[1];
+                }
+            }
+            
+            // Method B: Fallback if the admin already revealed the sender info (parsed from edited text)
+            if (!targetUserId && (replyTo.text || replyTo.caption)) {
+                const text = replyTo.text || replyTo.caption;
+                const match = text.match(/ID: (\d+)/);
+                if (match) targetUserId = match[1];
+            }
+
+            // If we found the original sender's ID, copy the admin's reply back to them
+            if (targetUserId) {
+                try {
+                    await bot.copyMessage(targetUserId, logChannelId, messageId);
+                    await bot.sendMessage(targetUserId, "📩 _Admindan yuqoridagi xabarga javob keldi_", { parse_mode: "Markdown" });
+                } catch (err) {
+                    console.error("Failed to send reply to user:", err);
+                    await bot.sendMessage(logChannelId, "❌ Javob yuborishda xatolik (Balki user botni bloklagan).", { reply_to_message_id: messageId });
+                }
+            }
+        }
+        // Ensure we always return 200 OK for any message in the admin channel
+        return res.status(200).send('OK');
+    }
 
     // 2. Deduplication — catch Telegram webhook retries
     const uniqueMsgId = `${chatId}_${messageId}`;
@@ -328,7 +363,12 @@ export default async function handler(req, res) {
               await bot.sendMessage(logChannelId, textToSend || "Media", { reply_markup: adminKeyboard });
             }
 
-            await bot.sendMessage(chatId, "⏳ Media faylingiz adminga tekshirish uchun yuborildi. Tasdiqlangandan so'ng kanalga joylanadi.");
+            // Send confirmation to the user
+            try {
+                await bot.sendMessage(chatId, "✅ Xabaringiz adminga muvaffaqiyatli yetkazildi!");
+            } catch (err) {
+                console.error("Failed to send confirmation:", err);
+            }
           } catch (err) {
             console.error('Media log error:', err);
           }
