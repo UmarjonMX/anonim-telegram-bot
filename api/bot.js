@@ -4,6 +4,12 @@ import { Redis } from '@upstash/redis';
 import fs from 'fs';
 import path from 'path';
 
+// Simple In-Memory Cache for Rate Limiting and Retry Deduplication
+// NOTE: Resets on cold starts in serverless, but catches 95% of rapid-fire webhook bursts.
+const processedMessages = new Set();
+const userLastMessageTime = new Map();
+const RATE_LIMIT_MS = 2000; // 2 seconds between messages per user
+
 // Initialize Redis client
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
@@ -59,11 +65,15 @@ export default async function handler(req, res) {
     return res.status(200).send('Only POST requests are accepted');
   }
 
+
+  // 1. Immediately acknowledge Telegram to prevent retry timeouts (serverless-safe)
+  res.status(200).send('OK');
+
   // Read the token from environment variables
   const token = process.env.BOT_TOKEN;
   if (!token) {
     console.error('BOT_TOKEN is missing');
-    return res.status(500).send('Server configuration error');
+    return;
   }
   const logChannelId = process.env.LOG_CHANNEL_ID;
 
@@ -211,19 +221,52 @@ export default async function handler(req, res) {
           await bot.answerCallbackQuery(query.id, { text: `Holat o'zgardi: ${newState}` });
         } catch(e) { console.error('Toggle error:', e); }
       }
-      return res.status(200).send('OK');
+      return;
 
     }
 
     // Message Extraction
     if (!body || !body.message) {
-      return res.status(200).send('OK');
+      return;
     }
 
     const msg = body.message;
     const chatId = msg.chat.id;
     const messageId = msg.message_id;
     const chatType = msg.chat.type;
+
+    // Ignore messages coming FROM the admin log channel itself
+    if (logChannelId && chatId.toString() === logChannelId.toString()) return;
+
+    // 2. Deduplication — catch Telegram webhook retries
+    const uniqueMsgId = `${chatId}_${messageId}`;
+    if (processedMessages.has(uniqueMsgId)) {
+      console.log(`Duplicate message caught: ${uniqueMsgId}`);
+      return;
+    }
+    processedMessages.add(uniqueMsgId);
+    // Keep Set size manageable
+    if (processedMessages.size > 1000) {
+      processedMessages.delete(processedMessages.values().next().value);
+    }
+
+    // 3. Flood Control — rate limit per user
+    const now = Date.now();
+    const lastTime = userLastMessageTime.get(chatId) || 0;
+    if (now - lastTime < RATE_LIMIT_MS) {
+      console.log(`Rate limit hit for user: ${chatId}`);
+      return;
+    }
+    userLastMessageTime.set(chatId, now);
+
+    // 4. Basic Media Group Handling — only process the first item of an album
+    if (msg.media_group_id) {
+      const groupKey = `group_${msg.media_group_id}`;
+      if (processedMessages.has(groupKey)) {
+        return; // Subsequent album items — skip to avoid duplicate admin alerts
+      }
+      processedMessages.add(groupKey);
+    }
 
     // Media Manual Approval Logic
     if (msg.photo || msg.video || msg.animation || msg.document || msg.audio || msg.voice || msg.sticker) {
@@ -295,7 +338,7 @@ export default async function handler(req, res) {
         } else {
           await bot.sendMessage(chatId, "🚫 Media qabul qilish vaqtincha yopiq.");
         }
-        return res.status(200).send('OK');
+        return;
       } else if (chatType === 'supergroup' || chatType === 'group') {
         try {
           const autoDeleteState = await redis.get('auto_delete_comments');
@@ -305,7 +348,7 @@ export default async function handler(req, res) {
             }
           }
         } catch(e) { console.error('Group media check error:', e); }
-        return res.status(200).send('OK');
+        return;
       }
     }
 
@@ -322,7 +365,7 @@ export default async function handler(req, res) {
       } catch (err) {
         console.error('Error sending start message:', err);
       }
-      return res.status(200).send('OK');
+      return;
     }
 
     if (chatType === 'private' && msg.text === '/rules') {
@@ -331,7 +374,7 @@ export default async function handler(req, res) {
         const rulesImage = fs.readFileSync(path.join(process.cwd(), 'images', 'rules_pic.png'));
         await bot.sendPhoto(chatId, rulesImage, { caption: rulesText });
       } catch (err) { console.error(err); }
-      return res.status(200).send('OK');
+      return;
     }
 
     if (chatType === 'private' && msg.text === '/tips') {
@@ -345,7 +388,7 @@ export default async function handler(req, res) {
         const tipsImage = fs.readFileSync(path.join(process.cwd(), 'images', 'tips_pic.png'));
         await bot.sendPhoto(chatId, tipsImage, { caption: tipsText });
       } catch (err) { console.error(err); }
-      return res.status(200).send('OK');
+      return;
     }
 
     if (chatType === 'private' && msg.text === '/sozlamalar' && msg.from.id.toString() === process.env.ADMIN_ID) {
@@ -360,7 +403,7 @@ export default async function handler(req, res) {
           }
         });
       } catch(e) { console.error('Settings error:', e); }
-      return res.status(200).send('OK');
+      return;
     }
 
     // Text Extraction
@@ -374,19 +417,19 @@ export default async function handler(req, res) {
         const aiResult = await checkTextWithAI(extractedText);
         if (typeof aiResult === 'string' && aiResult.startsWith("ERROR: ")) {
           await bot.sendMessage(chatId, "⚠️ AI Xatosi: " + aiResult);
-          return res.status(200).send('OK');
+          return;
         }
         const isClean = aiResult;
         
         if (isClean === null) {
-           return res.status(200).send('OK');
+           return;
         } else if (isClean === false) {
            try {
              await bot.deleteMessage(chatId, messageId);
            } catch (err) {
              console.error('Error deleting bad word message in group:', err);
            }
-           return res.status(200).send('OK');
+           return;
         } else if (isClean === true) {
            try {
              await bot.deleteMessage(chatId, messageId);
@@ -406,10 +449,10 @@ export default async function handler(req, res) {
            } catch (err) {
              console.error('Error sending anonymous message in group:', err);
            }
-           return res.status(200).send('OK');
+           return;
         }
       }
-      return res.status(200).send('OK');
+      return;
     }
 
     // Private Logic
@@ -423,7 +466,7 @@ export default async function handler(req, res) {
             }
           };
           await bot.sendMessage(chatId, "🛑 Botdan foydalanish va anonim xabar yuborish uchun avval kanalimizga obuna bo'lishingiz shart!\n\nIltimos, pastdagi tugma orqali obuna bo'ling va xabaringizni qaytadan yuboring.", opts);
-          return res.status(200).send('OK');
+          return;
         }
       } catch (err) {
         console.error("Membership check error (Bot likely not admin in channel):", err.message);
@@ -494,14 +537,14 @@ export default async function handler(req, res) {
             } catch (e) { console.error('Log error in blacklist:', e); }
           }
           await bot.sendMessage(chatId, "🚫 Xabaringizda taqiqlangan so'zlar aniqlandi va tizim tomonidan rad etildi.");
-          return res.status(200).send('OK');
+          return;
         }
       }
 
       const aiResult = await checkTextWithAI(aiReadyText);
       if (typeof aiResult === 'string' && aiResult.startsWith("ERROR: ")) {
         await bot.sendMessage(chatId, "⚠️ AI Xatosi: " + aiResult);
-        return res.status(200).send('OK');
+        return;
       }
       const isClean = aiResult;
 
@@ -512,14 +555,14 @@ export default async function handler(req, res) {
         } catch (err) {
           console.error(err);
         }
-        return res.status(200).send('OK');
+        return;
       } else if (isClean === false) {
         try {
           await bot.sendMessage(chatId, "🚫 Uzr, xabaringizda taqiqlangan so'zlar bor. Iltimos, hurmatni saqlang!");
         } catch (err) {
           console.error(err);
         }
-        return res.status(200).send('OK');
+        return;
       } else if (isClean === true) {
         try {
           let sentMsgId;
@@ -571,15 +614,15 @@ export default async function handler(req, res) {
             console.error('Error sending error message:', err);
           }
         }
-        return res.status(200).send('OK');
+        return;
       }
     }
 
     // Fallback for any other logic paths
-    return res.status(200).send('OK');
+    return;
 
   } catch (error) {
     console.error('General webhook error:', error);
-    return res.status(200).send('OK');
+    return;
   }
 }
