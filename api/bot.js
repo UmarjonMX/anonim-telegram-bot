@@ -65,14 +65,11 @@ export default async function handler(req, res) {
     return res.status(200).send('Only POST requests are accepted');
   }
 
-  // 1. Immediately respond to Telegram to prevent retry timeouts
-  res.status(200).send('OK');
-
   // Read the token from environment variables
   const token = process.env.BOT_TOKEN;
   if (!token) {
     console.error('BOT_TOKEN is missing');
-    return;
+    return res.status(200).send('OK');
   }
   const logChannelId = process.env.LOG_CHANNEL_ID;
 
@@ -220,13 +217,13 @@ export default async function handler(req, res) {
           await bot.answerCallbackQuery(query.id, { text: `Holat o'zgardi: ${newState}` });
         } catch(e) { console.error('Toggle error:', e); }
       }
-      return;
+      return res.status(200).send('OK');
 
     }
 
     // Message Extraction
     if (!body || !body.message) {
-      return;
+      return res.status(200).send('OK');
     }
 
     const msg = body.message;
@@ -235,13 +232,13 @@ export default async function handler(req, res) {
     const chatType = msg.chat.type;
 
     // Ignore messages originating from the Admin/Log channel itself
-    if (logChannelId && chatId.toString() === logChannelId.toString()) return;
+    if (logChannelId && chatId.toString() === logChannelId.toString()) return res.status(200).send('OK');
 
     // 2. Deduplication — catch Telegram webhook retries
     const uniqueMsgId = `${chatId}_${messageId}`;
     if (processedMessages.has(uniqueMsgId)) {
       console.log(`Duplicate message caught: ${uniqueMsgId}`);
-      return;
+      return res.status(200).send('OK');
     }
     processedMessages.add(uniqueMsgId);
     // Keep Set size manageable to avoid unbounded memory growth
@@ -254,7 +251,7 @@ export default async function handler(req, res) {
     const lastTime = userLastMessageTime.get(chatId) || 0;
     if (now - lastTime < RATE_LIMIT_MS) {
       console.log(`Rate limit hit for user: ${chatId}`);
-      return;
+      return res.status(200).send('OK');
     }
     userLastMessageTime.set(chatId, now);
 
@@ -263,7 +260,7 @@ export default async function handler(req, res) {
     if (msg.media_group_id) {
       const groupKey = `group_${msg.media_group_id}`;
       if (processedMessages.has(groupKey)) {
-        return; // Skip subsequent items in the same album
+        return res.status(200).send('OK'); // Skip subsequent items in the same album
       }
       processedMessages.add(groupKey);
     }
@@ -338,7 +335,7 @@ export default async function handler(req, res) {
         } else {
           await bot.sendMessage(chatId, "🚫 Media qabul qilish vaqtincha yopiq.");
         }
-        return;
+        return res.status(200).send('OK');
       } else if (chatType === 'supergroup' || chatType === 'group') {
         try {
           const autoDeleteState = await redis.get('auto_delete_comments');
@@ -348,7 +345,7 @@ export default async function handler(req, res) {
             }
           }
         } catch(e) { console.error('Group media check error:', e); }
-        return;
+        return res.status(200).send('OK');
       }
     }
 
@@ -365,7 +362,7 @@ export default async function handler(req, res) {
       } catch (err) {
         console.error('Error sending start message:', err);
       }
-      return;
+      return res.status(200).send('OK');
     }
 
     if (chatType === 'private' && msg.text === '/rules') {
@@ -374,7 +371,7 @@ export default async function handler(req, res) {
         const rulesImage = fs.readFileSync(path.join(process.cwd(), 'images', 'rules_pic.png'));
         await bot.sendPhoto(chatId, rulesImage, { caption: rulesText });
       } catch (err) { console.error(err); }
-      return;
+      return res.status(200).send('OK');
     }
 
     if (chatType === 'private' && msg.text === '/tips') {
@@ -388,7 +385,7 @@ export default async function handler(req, res) {
         const tipsImage = fs.readFileSync(path.join(process.cwd(), 'images', 'tips_pic.png'));
         await bot.sendPhoto(chatId, tipsImage, { caption: tipsText });
       } catch (err) { console.error(err); }
-      return;
+      return res.status(200).send('OK');
     }
 
     if (chatType === 'private' && msg.text === '/sozlamalar' && msg.from.id.toString() === process.env.ADMIN_ID) {
@@ -403,7 +400,7 @@ export default async function handler(req, res) {
           }
         });
       } catch(e) { console.error('Settings error:', e); }
-      return;
+      return res.status(200).send('OK');
     }
 
     // Text Extraction
@@ -417,19 +414,19 @@ export default async function handler(req, res) {
         const aiResult = await checkTextWithAI(extractedText);
         if (typeof aiResult === 'string' && aiResult.startsWith("ERROR: ")) {
           await bot.sendMessage(chatId, "⚠️ AI Xatosi: " + aiResult);
-          return;
+          return res.status(200).send('OK');
         }
         const isClean = aiResult;
         
         if (isClean === null) {
-           return;
+           return res.status(200).send('OK');
         } else if (isClean === false) {
            try {
              await bot.deleteMessage(chatId, messageId);
            } catch (err) {
              console.error('Error deleting bad word message in group:', err);
            }
-           return;
+           return res.status(200).send('OK');
         } else if (isClean === true) {
            try {
              await bot.deleteMessage(chatId, messageId);
@@ -449,10 +446,10 @@ export default async function handler(req, res) {
            } catch (err) {
              console.error('Error sending anonymous message in group:', err);
            }
-           return;
+           return res.status(200).send('OK');
         }
       }
-      return;
+      return res.status(200).send('OK');
     }
 
     // Private Logic
@@ -466,7 +463,7 @@ export default async function handler(req, res) {
             }
           };
           await bot.sendMessage(chatId, "🛑 Botdan foydalanish va anonim xabar yuborish uchun avval kanalimizga obuna bo'lishingiz shart!\n\nIltimos, pastdagi tugma orqali obuna bo'ling va xabaringizni qaytadan yuboring.", opts);
-          return;
+          return res.status(200).send('OK');
         }
       } catch (err) {
         console.error("Membership check error (Bot likely not admin in channel):", err.message);
@@ -537,14 +534,14 @@ export default async function handler(req, res) {
             } catch (e) { console.error('Log error in blacklist:', e); }
           }
           await bot.sendMessage(chatId, "🚫 Xabaringizda taqiqlangan so'zlar aniqlandi va tizim tomonidan rad etildi.");
-          return;
+          return res.status(200).send('OK');
         }
       }
 
       const aiResult = await checkTextWithAI(aiReadyText);
       if (typeof aiResult === 'string' && aiResult.startsWith("ERROR: ")) {
         await bot.sendMessage(chatId, "⚠️ AI Xatosi: " + aiResult);
-        return;
+        return res.status(200).send('OK');
       }
       const isClean = aiResult;
 
@@ -555,14 +552,14 @@ export default async function handler(req, res) {
         } catch (err) {
           console.error(err);
         }
-        return;
+        return res.status(200).send('OK');
       } else if (isClean === false) {
         try {
           await bot.sendMessage(chatId, "🚫 Uzr, xabaringizda taqiqlangan so'zlar bor. Iltimos, hurmatni saqlang!");
         } catch (err) {
           console.error(err);
         }
-        return;
+        return res.status(200).send('OK');
       } else if (isClean === true) {
         try {
           let sentMsgId;
@@ -614,11 +611,16 @@ export default async function handler(req, res) {
             console.error('Error sending error message:', err);
           }
         }
-        return;
+        return res.status(200).send('OK');
       }
     }
+    
+    // MUST BE AT THE VERY END OF THE TRY BLOCK
+    return res.status(200).send('OK');
 
   } catch (error) {
     console.error('General webhook error:', error);
+    // MUST ALSO SEND 200 IN CATCH TO PREVENT TELEGRAM RETRY LOOPS ON ERRORS
+    return res.status(200).send('OK');
   }
 }
