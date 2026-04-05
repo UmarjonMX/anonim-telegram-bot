@@ -4,12 +4,6 @@ import { Redis } from '@upstash/redis';
 import fs from 'fs';
 import path from 'path';
 
-// Simple In-Memory Cache for Rate Limiting and Retry Deduplication
-// NOTE: Resets on cold starts in serverless, but catches 95% of rapid-fire webhook bursts.
-const processedMessages = new Set();
-const userLastMessageTime = new Map();
-const RATE_LIMIT_MS = 2000; // 2 seconds between messages per user
-
 // Initialize Redis client
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
@@ -18,6 +12,12 @@ const redis = new Redis({
 
 // Initialize the bot and Groq AI at the top.
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+// Simple In-Memory Cache for Rate Limiting and Retry Deduplication
+// (Module-level: shared within a single serverless instance, resets on cold start)
+const processedMessages = new Set();
+const userLastMessageTime = new Map();
+const RATE_LIMIT_MS = 2000; // 2 seconds between messages per user
 
 // AI Function
 async function checkTextWithAI(text) {
@@ -65,8 +65,7 @@ export default async function handler(req, res) {
     return res.status(200).send('Only POST requests are accepted');
   }
 
-
-  // 1. Immediately acknowledge Telegram to prevent retry timeouts (serverless-safe)
+  // 1. Immediately respond to Telegram to prevent retry timeouts
   res.status(200).send('OK');
 
   // Read the token from environment variables
@@ -235,7 +234,7 @@ export default async function handler(req, res) {
     const messageId = msg.message_id;
     const chatType = msg.chat.type;
 
-    // Ignore messages coming FROM the admin log channel itself
+    // Ignore messages originating from the Admin/Log channel itself
     if (logChannelId && chatId.toString() === logChannelId.toString()) return;
 
     // 2. Deduplication — catch Telegram webhook retries
@@ -245,12 +244,12 @@ export default async function handler(req, res) {
       return;
     }
     processedMessages.add(uniqueMsgId);
-    // Keep Set size manageable
+    // Keep Set size manageable to avoid unbounded memory growth
     if (processedMessages.size > 1000) {
       processedMessages.delete(processedMessages.values().next().value);
     }
 
-    // 3. Flood Control — rate limit per user
+    // 3. Flood Control — rate limiting per user (2 seconds)
     const now = Date.now();
     const lastTime = userLastMessageTime.get(chatId) || 0;
     if (now - lastTime < RATE_LIMIT_MS) {
@@ -259,11 +258,12 @@ export default async function handler(req, res) {
     }
     userLastMessageTime.set(chatId, now);
 
-    // 4. Basic Media Group Handling — only process the first item of an album
+    // 4. Basic Media Group Handling
+    // Only process the first item of an album to avoid spamming admin channel
     if (msg.media_group_id) {
       const groupKey = `group_${msg.media_group_id}`;
       if (processedMessages.has(groupKey)) {
-        return; // Subsequent album items — skip to avoid duplicate admin alerts
+        return; // Skip subsequent items in the same album
       }
       processedMessages.add(groupKey);
     }
@@ -618,11 +618,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fallback for any other logic paths
-    return;
-
   } catch (error) {
     console.error('General webhook error:', error);
-    return;
   }
 }
