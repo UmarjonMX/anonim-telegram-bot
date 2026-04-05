@@ -222,11 +222,10 @@ export default async function handler(req, res) {
     }
 
     // Message Extraction
-    if (!body || !body.message) {
+    const msg = body ? (body.message || body.channel_post) : null;
+    if (!msg) {
       return res.status(200).send('OK');
     }
-
-    const msg = body.message;
     const chatId = msg.chat.id;
     const messageId = msg.message_id;
     const chatType = msg.chat.type;
