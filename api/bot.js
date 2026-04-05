@@ -158,6 +158,16 @@ export default async function handler(req, res) {
         } catch (err) {
           console.error('Error rejecting media:', err);
         }
+      } else if (data.startsWith('info_')) {
+        const userId = data.split('_')[1];
+        try {
+          await bot.answerCallbackQuery(query.id, {
+            text: `Yuboruvchi haqida ma'lumot:\nUser ID: ${userId}`,
+            show_alert: true 
+          });
+        } catch (err) {
+          console.error('Error handling info:', err);
+        }
       } else if (data.startsWith('toggle_')) {
         const newState = data.split('_')[1];
         try {
@@ -193,18 +203,59 @@ export default async function handler(req, res) {
       if (chatType === 'private') {
         if (logChannelId) {
           try {
-            await bot.copyMessage(logChannelId, chatId, messageId);
-            const mediaLogText = `📸 <b>Yangi Media Xabar</b>\n\n👤 <b>Yuboruvchi:</b> <a href="tg://user?id=${msg.from.id}">${msg.from.first_name || 'Ismsiz'}</a>\n🆔 ID: <code>${msg.from.id}</code>\n\nQuyidagi tugmalar orqali tasdiqlang yoki rad eting:`;
-            await bot.sendMessage(logChannelId, mediaLogText, {
-              parse_mode: 'HTML',
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: "✅ Tasdiqlash va Kanalga joylash", callback_data: `approve_${chatId}_${messageId}` }],
-                  [{ text: "❌ Rad etish", callback_data: `reject_${chatId}_${messageId}` }],
-                  [{ text: "🚫 Qoidabuzarni Ban qilish", callback_data: `ban_${msg.from.id}` }]
+            const rawText = msg.text || msg.caption || "";
+            const adminMention = "\n\n⚠️ @Umar_ibn_Hattab Yangi media tekshirish uchun keldi!";
+            const textToSend = rawText ? rawText + adminMention : adminMention;
+            
+            const adminKeyboard = {
+              inline_keyboard: [
+                [
+                  { text: '✅ Ruxsat', callback_data: `approve_${chatId}_${messageId}` },
+                  { text: '❌ Rad etish', callback_data: `reject_${chatId}_${messageId}` },
+                  { text: '❌ Ban', callback_data: `ban_${chatId}` }
+                ],
+                [
+                  { text: "🕵️‍♂️ Yuboruvchini ko'rish", callback_data: `info_${chatId}` }
                 ]
-              }
-            });
+              ]
+            };
+
+            if (msg.photo) {
+              const photoId = msg.photo[msg.photo.length - 1].file_id;
+              await bot.sendPhoto(logChannelId, photoId, {
+                caption: textToSend,
+                reply_markup: adminKeyboard
+              });
+            } else if (msg.video) {
+              await bot.sendVideo(logChannelId, msg.video.file_id, {
+                caption: textToSend,
+                reply_markup: adminKeyboard
+              });
+            } else if (msg.animation) {
+              await bot.sendAnimation(logChannelId, msg.animation.file_id, {
+                caption: textToSend,
+                reply_markup: adminKeyboard
+              });
+            } else if (msg.document) {
+              await bot.sendDocument(logChannelId, msg.document.file_id, {
+                caption: textToSend,
+                reply_markup: adminKeyboard
+              });
+            } else if (msg.audio) {
+              await bot.sendAudio(logChannelId, msg.audio.file_id, {
+                caption: textToSend,
+                reply_markup: adminKeyboard
+              });
+            } else if (msg.voice) {
+              await bot.sendVoice(logChannelId, msg.voice.file_id, {
+                caption: textToSend,
+                reply_markup: adminKeyboard
+              });
+            } else {
+              await bot.copyMessage(logChannelId, chatId, messageId);
+              await bot.sendMessage(logChannelId, textToSend || "Media", { reply_markup: adminKeyboard });
+            }
+
             await bot.sendMessage(chatId, "⏳ Media faylingiz adminga tekshirish uchun yuborildi. Tasdiqlangandan so'ng kanalga joylanadi.");
           } catch (err) {
             console.error('Media log error:', err);
@@ -460,22 +511,18 @@ export default async function handler(req, res) {
           });
           if (logChannelId) {
             try {
-              await bot.copyMessage(logChannelId, chatId, messageId);
-              const firstName = msg.from.first_name || 'Ismsiz';
-              const lastName = msg.from.last_name ? ' ' + msg.from.last_name : '';
-              const fullName = firstName + lastName;
-              const username = msg.from.username ? '@' + msg.from.username : "Yo'q";
-              const lang = msg.from.language_code || "Noma'lum";
-              const isPremium = msg.from.is_premium ? 'Ha ⭐️' : "Yo'q";
-              const messageContent = msg.text || msg.caption || 'Faqat media/fayl';
-
-              const logText = `🚨 <b>Yangi anonim xabar</b>\n\n💬 <b>Xabar:</b>\n${messageContent}\n\n👤 <b>Yuboruvchi ma'lumotlari:</b>\n▪️ <b>Ism:</b> <a href="tg://user?id=${msg.from.id}">${fullName}</a>\n▪️ <b>Username:</b> ${username}\n▪️ <b>ID:</b> <code>${msg.from.id}</code>\n▪️ <b>Til:</b> ${lang}\n▪️ <b>Premium:</b> ${isPremium}`;
-              await bot.sendMessage(logChannelId, logText, {
-                parse_mode: 'HTML',
-                reply_markup: {
-                  inline_keyboard: [[{ text: "🚫 Ban qilish", callback_data: `ban_${msg.from.id}` }]]
-                }
-              });
+              const messageContent = msg.text || msg.caption || '';
+              const adminKeyboard = {
+                inline_keyboard: [
+                  [
+                    { text: "🚫 Ban qilish", callback_data: `ban_${msg.from.id}` }
+                  ],
+                  [
+                    { text: "🕵️‍♂️ Yuboruvchini ko'rish", callback_data: `info_${msg.from.id}` }
+                  ]
+                ]
+              };
+              await bot.sendMessage(logChannelId, messageContent, { reply_markup: adminKeyboard });
             } catch (logErr) {
               console.error('Log channel error:', logErr);
             }
