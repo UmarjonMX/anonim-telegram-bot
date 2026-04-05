@@ -256,11 +256,24 @@ export default async function handler(req, res) {
             // If we found the original sender's ID, copy the admin's reply back to them
             if (targetUserId) {
                 try {
-                    await bot.copyMessage(targetUserId, logChannelId, messageId);
-                    await bot.sendMessage(targetUserId, "📩 _Admindan yuqoridagi xabarga javob keldi_", { parse_mode: "Markdown" });
+                    if (msg.text) {
+                        // It's a pure text message
+                        const formattedText = `📩 Admindan xabar keldi:\n\n<b>${msg.text}</b>`;
+                        await bot.sendMessage(targetUserId, formattedText, { parse_mode: "HTML" });
+                    } else {
+                        // It's a media message. We copy the media but overwrite the caption.
+                        // (Note: Stickers will ignore the caption, but photos/videos will show it beautifully).
+                        const originalCaption = msg.caption ? msg.caption : "";
+                        const formattedCaption = originalCaption ? `📩 Admindan xabar keldi:\n\n<b>${originalCaption}</b>` : `📩 Admindan media xabar keldi:`;
+                        
+                        await bot.copyMessage(targetUserId, logChannelId, messageId, {
+                            caption: formattedCaption,
+                            parse_mode: "HTML"
+                        });
+                    }
                 } catch (err) {
                     console.error("Failed to send reply to user:", err);
-                    await bot.sendMessage(logChannelId, "❌ Javob yuborishda xatolik (Balki user botni bloklagan).", { reply_to_message_id: messageId });
+                    // await bot.sendMessage(logChannelId, "❌ Xatolik yuz berdi.", { reply_to_message_id: messageId });
                 }
             }
         }
