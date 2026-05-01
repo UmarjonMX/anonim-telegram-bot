@@ -449,8 +449,13 @@ export default async function handler(req, res) {
           ]
         };
 
-        // Standard welcome message for the user
-        const welcomeText = "Assalomu alaykum! Bu anonim bot. Xabaringizni bemalol yozib qoldirishingiz mumkin, u adminga yashirin tarzda yetkaziladi.";
+        const welcomeText = `Xush kelibsiz! Bu bot xabarlaringizni mutlaqo anonim tarzda @imi_anonymous (https://t.me/imi_anonymous) kanaliga yuboradi.
+
+🚨 /rules (qoidalar) ni unutmang: agar ularni buzsangiz, xabarlaringiz kanalga joylanishidan oldin adminlar tekshiruvidan o'tishi mumkin.
+
+💡 Botdan maksimal darajada foydalanmoqchimisiz? Unda foydali /tips (maslahatlar) bilan tanishib chiqing!
+
+Maroq bilan foydalaning va hurmatni saqlang)`;
         
         try {
             // Send to user
