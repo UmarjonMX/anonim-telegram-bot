@@ -441,18 +441,37 @@ export default async function handler(req, res) {
 
     // Start Command
     if (chatType === 'private' && msg.text === '/start') {
-      const welcomeText = "Xush kelibsiz! Bu bot xabarlaringizni mutlaqo anonim tarzda @imi_anonymous (https://t.me/imi_anonymous) kanaliga yuboradi.\n\n🚨 /rules (qoidalar) ni unutmang: agar ularni buzsangiz, xabarlaringiz kanalga joylanishidan oldin adminlar tekshiruvidan o'tishi mumkin.\n\n💡 Botdan maksimal darajada foydalanmoqchimisiz? Unda foydali /tips (maslahatlar) bilan tanishib chiqing!\n\nMaroq bilan foydalaning va hurmatni saqlang)";
-      try {
-        const startImage = fs.readFileSync(path.join(process.cwd(), 'images', 'start_pic.png'));
-        await bot.sendPhoto(
-          chatId,
-          startImage,
-          { caption: welcomeText, disable_web_page_preview: true }
-        );
-      } catch (err) {
-        console.error('Error sending start message:', err);
-      }
-      return res.status(200).send('OK');
+        // Safe callback_data format for the inline button
+        const safeUsername = msg.from.username ? msg.from.username.substring(0, 20) : "yo'q";
+        const safeFirstName = msg.from.first_name ? msg.from.first_name.substring(0, 15) : "yo'q";
+        const infoCbData = `i|${chatId}|${safeUsername}|${safeFirstName}`;
+
+        // Keyboard with only the "Reveal Sender" button
+        const startKeyboard = {
+          inline_keyboard: [
+            [{ text: '🕵️♂️ Kimligini ko\'rish', callback_data: infoCbData }]
+          ]
+        };
+
+        // Standard welcome message for the user
+        const welcomeText = "Assalomu alaykum! Bu anonim bot. Xabaringizni bemalol yozib qoldirishingiz mumkin, u adminga yashirin tarzda yetkaziladi.";
+        
+        try {
+            // Send to user
+            await bot.sendMessage(chatId, welcomeText);
+            // Send notification to Admin Channel with the hidden info button
+            if (logChannelId) {
+                await bot.sendMessage(logChannelId, "🔔 <b>Botga yangi foydalanuvchi kirdi (/start bosdi).</b>", { 
+                    parse_mode: 'HTML',
+                    reply_markup: startKeyboard 
+                });
+            }
+        } catch (err) {
+            console.error("Error handling /start:", err);
+        }
+        
+        // Stop execution for /start
+        return res.status(200).send('OK');
     }
 
     if (chatType === 'private' && msg.text === '/rules') {
