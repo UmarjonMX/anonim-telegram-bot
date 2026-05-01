@@ -1,14 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import Groq from 'groq-sdk';
-import { Redis } from '@upstash/redis';
 import fs from 'fs';
 import path from 'path';
-
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
 
 // Initialize the bot and Groq AI at the top.
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -21,6 +14,9 @@ const userActivity = new Map();
 const SPAM_LIMIT = 4; // Max messages allowed in the window before penalty
 const TIME_WINDOW_MS = 5000; // 5 seconds window
 const PENALTY_MS = 60000; // 1 minute penalty timeout (can be adjusted)
+
+// In-Memory Settings Cache
+let autoDeleteCommentsState = 'on';
 
 // AI Function
 async function checkTextWithAI(text) {
@@ -207,7 +203,7 @@ export default async function handler(req, res) {
       } else if (data.startsWith('toggle_')) {
         const newState = data.split('_')[1];
         try {
-          await redis.set('auto_delete_comments', newState);
+          autoDeleteCommentsState = newState;
           const btnText = newState === 'on' ? '🟢 O\'chirish' : '🔴 Yoqish';
           await bot.editMessageText(`⚙️ <b>Guruh (Izohlar) media filtri:</b> ${newState === 'on' ? 'Yoniq' : 'O\'chiq'}\n\nO'chiq holatda guruhga hamma narsa tashlash mumkin.`, {
             chat_id: message.chat.id,
@@ -428,7 +424,7 @@ export default async function handler(req, res) {
         return res.status(200).send('OK');
       } else if (chatType === 'supergroup' || chatType === 'group') {
         try {
-          const autoDeleteState = await redis.get('auto_delete_comments');
+          const autoDeleteState = autoDeleteCommentsState;
           if (autoDeleteState !== 'off') { // Default is ON
             if (!msg.animation && !msg.sticker) {
               await bot.deleteMessage(chatId, messageId).catch(console.error);
@@ -499,7 +495,7 @@ export default async function handler(req, res) {
 
     if (chatType === 'private' && msg.text === '/sozlamalar' && msg.from.id.toString() === process.env.ADMIN_ID) {
       try {
-        const state = await redis.get('auto_delete_comments') || 'on';
+        const state = autoDeleteCommentsState;
         const btnText = state === 'on' ? '🟢 O\'chirish' : '🔴 Yoqish';
         const newState = state === 'on' ? 'off' : 'on';
         await bot.sendMessage(chatId, `⚙️ <b>Guruh (Izohlar) media filtri:</b> ${state === 'on' ? 'Yoniq' : 'O\'chiq'}\n\nO'chiq holatda guruhga hamma narsa tashlash mumkin.`, {
