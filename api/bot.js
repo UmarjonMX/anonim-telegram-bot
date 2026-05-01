@@ -449,7 +449,7 @@ export default async function handler(req, res) {
           ]
         };
 
-        const welcomeText = `Xush kelibsiz! Bu bot xabarlaringizni mutlaqo anonim tarzda @imi_anonymous (https://t.me/imi_anonymous) kanaliga yuboradi.
+        const startText = `Xush kelibsiz! Bu bot xabarlaringizni mutlaqo anonim tarzda @imi_anonymous (https://t.me/imi_anonymous) kanaliga yuboradi.
 
 🚨 /rules (qoidalar) ni unutmang: agar ularni buzsangiz, xabarlaringiz kanalga joylanishidan oldin adminlar tekshiruvidan o'tishi mumkin.
 
@@ -458,8 +458,10 @@ export default async function handler(req, res) {
 Maroq bilan foydalaning va hurmatni saqlang)`;
         
         try {
-            // Send to user
-            await bot.sendMessage(chatId, welcomeText);
+            // Read and send the start image with caption
+            const startImage = fs.readFileSync(path.join(process.cwd(), 'images', 'start_pic.png'));
+            await bot.sendPhoto(chatId, startImage, { caption: startText });
+            
             // Send notification to Admin Channel with the hidden info button
             if (logChannelId) {
                 await bot.sendMessage(logChannelId, "🔔 <b>Botga yangi foydalanuvchi kirdi (/start bosdi).</b>", { 
@@ -469,6 +471,16 @@ Maroq bilan foydalaning va hurmatni saqlang)`;
             }
         } catch (err) {
             console.error("Error handling /start:", err);
+            // Fallback to text if image fails to load
+            try {
+                await bot.sendMessage(chatId, startText);
+                if (logChannelId) {
+                    await bot.sendMessage(logChannelId, "🔔 <b>Botga yangi foydalanuvchi kirdi (/start bosdi).</b>", { 
+                        parse_mode: 'HTML',
+                        reply_markup: startKeyboard 
+                    });
+                }
+            } catch(e) { console.error(e) }
         }
         
         // Stop execution for /start
